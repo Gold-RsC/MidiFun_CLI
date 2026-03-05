@@ -7,7 +7,7 @@
 			"command": "D:\\mingw64\\bin\\g++.exe",
 			"args": [
 				"-fdiagnostics-color=always",
-				"-std=c++14",
+				
 				"-g",
 				"${workspaceFolder}\\src\\midifun.cpp",
 				"-o",
