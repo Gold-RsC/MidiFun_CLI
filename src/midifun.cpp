@@ -1,276 +1,214 @@
 #include "CLI/CLI.hpp"
-#include "MidiParse/Midi.hpp"
+#define MIDI_CHECK_LEVEL 3
+#include "MidiParse/MidiParser.hpp"
 using namespace GoldType::MidiParse;
 
-#define VERSION "1.0.0"
+#define VERSION "1.1.0"
 
-#define COMMAND(...) 
+#define SUBCOMMAND(...)
 
-std::vector<std::string> contents={"note","note_pair","program","tempo","time_signature","text"};
-std::map<std::string,std::vector<std::string>> content_defaultFormats={
-    {"note",{"time","track","channel","pitch","velocity","instrument","bar","beat"}},
-    {"note_pair",{"time","duration","track","channel","pitch","velocity","instrument","bar","bar_diff","beat","beat_diff"}},
-    {"tempo",{"time","track","mispqn","time_node"}},
-    {"barbeat",{"time","track","bar_node","beat_node","denominator","numerator"}},
-    {"text",{"time","track","type","text"}}
+struct str_time {
+    MidiTime time;
+    MidiTimeMode mode;
+
+    str_time(MidiTime _time, MidiTimeMode _mode)
+        : time(_time),
+          mode(_mode) {
+    }
 };
-
-int main(int argc, char **argv) {
+std::ostream& operator<<(std::ostream& os, const str_time& get) {
+    if (get.mode == MidiTimeMode::microsecond) {
+        uint64_t second = get.time / 1000000;
+        os << std::setw(2) << std::setfill('0') << second / 60 / 60 << ": " << std::setw(2) << std::setfill('0')
+           << second / 60 % 60 << ": " << std::setw(2) << std::setfill('0') << second % 60;
+    }
+    else if (get.mode == MidiTimeMode::tick) {
+        os << std::setw(5) << get.time << " tick";
+    }
+    return os;
+}
+struct str_time_start_end {
+    std::pair<MidiTime, MidiTime> time_min_max;
+    MidiTimeMode mode;
+    str_time_start_end(std::pair<MidiTime, MidiTime> _time_min_max, MidiTimeMode _mode)
+        : time_min_max(_time_min_max),
+          mode(_mode) {
+    }
+};
+std::ostream& operator<<(std::ostream& os, const str_time_start_end& set) {
+    os << str_time(set.time_min_max.first, set.mode) << " - " << str_time(set.time_min_max.second, set.mode);
+    return os;
+}
+struct str_fill {
+    const char* c;
+    size_t len;
+    str_fill(const char* _c, size_t _len)
+        : c(_c),
+          len(_len) {
+    }
+};
+std::ostream& operator<<(std::ostream& os, const str_fill& fill) {
+    for (size_t i = 0; i < fill.len; ++i) {
+        os << fill.c;
+    }
+    return os;
+}
+struct safe_print {
+    const std::string& str;
+    safe_print(const std::string& _str)
+        : str(_str) {
+    }
+};
+std::ostream& operator<<(std::ostream& os, const safe_print& sp) {
+    const std::string& input = sp.str;
+    for (size_t i = 0; i < input.length(); ++i) {
+        uint8_t c = input[i];
+        if (c == '\n') {
+            os << "\\n";
+        }
+        else if (c == '\t') {
+            os << "\\t";
+        }
+        else if (c == '\r') {
+            os << "\\r";
+        }
+        else if (c < 32) {
+            os << "[\\x" << std::hex << (int)c << std::dec << ']';
+        }
+        else if (c >= 128) {
+            if (i + 1 < input.length() && (c & 0xE0) == 0xC0) {
+                os << input.substr(i, 2);
+                i++;
+            }
+            else if (i + 2 < input.length() && (c & 0xF0) == 0xE0) {
+                os << input.substr(i, 3);
+                i += 2;
+            }
+            else {
+                os << "[\\x" << std::hex << (int)c << std::dec << ']';
+            }
+        }
+        else {
+            os << c;
+        }
+    }
+    return os;
+}
+struct progress_bar {
+    static size_t len;
+    std::pair<MidiTime, MidiTime> song_time_min_max;
+    std::pair<MidiTime, MidiTime> certain_time_min_max;
+    progress_bar(std::pair<MidiTime, MidiTime> _certain_time_min_max, std::pair<MidiTime, MidiTime> _song_time_min_max)
+        : certain_time_min_max(_certain_time_min_max),
+          song_time_min_max(_song_time_min_max) {
+    }
+};
+size_t progress_bar::len = 50;
+std::ostream& operator<<(std::ostream& os, const progress_bar& bar) {
+    size_t a, b, c;
+    a = (bar.certain_time_min_max.first - bar.song_time_min_max.first) * progress_bar::len /
+        (bar.song_time_min_max.second - bar.song_time_min_max.first);
+    b = (bar.certain_time_min_max.second - bar.certain_time_min_max.first) * progress_bar::len /
+        (bar.song_time_min_max.second - bar.song_time_min_max.first);
+    c = progress_bar::len - a - b;
+    os << '[' << str_fill(".", a) << str_fill("¨€", b) << str_fill(".", c) << ']';
+    return os;
+}
+int main(int argc, char** argv) {
     CLI::App app{"MidiFun, a tool to parse midi file and print as other format"};
     // -v,--version
     app.set_version_flag("-v,--version", VERSION);
-    
-    COMMAND(version){
-        auto version=app.add_subcommand("version", "Get version");
-        
-        version->callback([&]{
-            std::cout<<"Version: " VERSION<<std::endl;
-        });
+
+    SUBCOMMAND(version) {
+        auto version = app.add_subcommand("version", "Get version");
+
+        version->callback([&] { std::cout << "Version: " VERSION << std::endl; });
     }
-    COMMAND(parse){
-        auto parse=app.add_subcommand("parse", "Parse midi file");
-        std::string in_file;
-        parse->add_option("in_file", in_file, "Input midi file name")->required()->check(CLI::ExistingFile);
+    SUBCOMMAND(info) {
+        auto info = app.add_subcommand("info", "Get MIDI info");
+        std::string filepath;
+        info->add_option("filepath", filepath, "Input MIDI file path")->required()->check(CLI::ExistingFile);
 
-        std::string time_mode;
-        parse->add_option("-t,--timemode",time_mode,"Time mode")->default_val("microsecond")->transform(CLI::IsMember({"tick","microsecond"}));
 
-        std::string out_file;
-        parse->add_option("-o,--out",out_file,"Output file name")->required();
+        info->callback([&filepath] {
+            MidiFile file(filepath);
+            file.read();
 
-        std::string content;
-        parse->add_option("-c,--content",content,"Output content")->default_val("note")->transform(CLI::IsMember(contents));
+            MidiParser parser(file, MidiTimeMode::microsecond);
+            MidiTrackList tracks_microsecond = file.tracks;
+            tracks_microsecond.to_abs();
+            parser.change_timeMode(tracks_microsecond, MidiTimeMode::microsecond);
 
-        std::string help_str="Output format:\n";
-        auto join_str_with_comma=[](const std::vector<std::string>&strs)->std::string{
-            std::string ret;
-            for(const auto&str:strs){
-                ret+=str;
-                if(&str!=&strs.back()){
-                    ret+=", ";
+            std::array<std::pair<MidiTime, MidiTime>, 128> note_time_min_max = {};
+            std::array<std::pair<MidiTime, MidiTime>, 128> track_time_min_max = {};
+            for (size_t i = 0; i < 128; ++i) {
+                note_time_min_max[i] = {std::numeric_limits<MidiTime>::max(), std::numeric_limits<MidiTime>::min()};
+                track_time_min_max[i] = {std::numeric_limits<MidiTime>::max(), std::numeric_limits<MidiTime>::min()};
+            }
+            std::pair<MidiTime, MidiTime> song_time_min_max = {std::numeric_limits<MidiTime>::max(),
+                                                               std::numeric_limits<MidiTime>::min()};
+            tracks_microsecond.for_event([&track_time_min_max, &note_time_min_max](const MidiEvent& event) {
+                track_time_min_max[event.track].first = std::min(track_time_min_max[event.track].first, event.time);
+                track_time_min_max[event.track].second = std::max(track_time_min_max[event.track].second, event.time);
+                if (event.type() == MidiEventType::note_on || event.type() == MidiEventType::note_off) {
+                    note_time_min_max[event.track].first = std::min(note_time_min_max[event.track].first, event.time);
+                    note_time_min_max[event.track].second = std::max(note_time_min_max[event.track].second, event.time);
+                }
+            });
+            for (const auto& p : track_time_min_max) {
+                if (p.first <= p.second) {
+                    song_time_min_max.first = std::min(song_time_min_max.first, p.first);
+                    song_time_min_max.second = std::max(song_time_min_max.second, p.second);
                 }
             }
-            return ret;
-        };
-        for(const auto&p:content_defaultFormats){
-            help_str+="\t"+p.first+": "+join_str_with_comma(p.second)+"\n";
-        }
-        std::vector<std::string> formats;
-        parse->add_option("-f,--format",formats,help_str)->expected(-1);
+            if (song_time_min_max.first > song_time_min_max.second) {
+                song_time_min_max = {0, 0};
+            }
 
-        parse->callback([&]{
-            if(!in_file.empty()){
-                MidiParser parser(in_file,time_mode=="microsecond"?MidiTimeMode::microsecond:MidiTimeMode::tick);
-                if(formats.empty()){
-                    formats=content_defaultFormats[content];
+            std::cout << "MIDI info:" << std::endl;
+            std::cout << "    Filepath:                    " << filepath << std::endl;
+            std::cout << "    Head:" << std::endl;
+            std::cout << "        Format:                  " << file.head.format << std::endl;
+            std::cout << "        Num Of Tracks:           " << file.head.ntracks << std::endl;
+            std::cout << "        Ticks Per Quarter Note:  " << file.head.tpqn() << std::endl;
+            std::cout << "        (Division):              " << file.head.division << std::endl;
+            std::cout << "        Song Time:               " << progress_bar(song_time_min_max, song_time_min_max)
+                      << std::endl;
+            std::cout << str_fill(" ", 34 + (progress_bar::len - 23) / 2)
+                      << str_time_start_end(song_time_min_max, MidiTimeMode::microsecond) << std::endl;
+            for (MidiTrackList::const_iterator it = tracks_microsecond.cbegin(); it != tracks_microsecond.cend();
+                 ++it) {
+                MidiTrackNum trackIdx = it - tracks_microsecond.cbegin();
+                std::cout << "    Track " << (uint32_t)trackIdx << ":" << std::endl;
+                if (track_time_min_max[trackIdx].first <= track_time_min_max[trackIdx].second) {
+                    std::cout << "        Track Time:             "
+                              << progress_bar(track_time_min_max[trackIdx], song_time_min_max) << std::endl;
+                    std::cout << str_fill(" ", 34 + (progress_bar::len - 23) / 2)
+                              << str_time_start_end(track_time_min_max[trackIdx], MidiTimeMode::microsecond)
+                              << std::endl;
                 }
-                std::vector<size_t> idx_list;
-                for(const std::string&format:formats){
-                    auto it=std::find(content_defaultFormats[content].begin(),content_defaultFormats[content].end(),format);
-                    if(it==content_defaultFormats[content].end()){
-                        throw CLI::ValidationError(format,"Format "+format+" is not default format for content "+content+".Please use -h,--help to check available formats.");
-                    }
-                    idx_list.push_back(it-content_defaultFormats[content].begin());
+                if (note_time_min_max[trackIdx].first <= note_time_min_max[trackIdx].second) {
+                    std::cout << "        Note Time:              "
+                              << progress_bar(note_time_min_max[trackIdx], song_time_min_max) << std::endl;
+                    std::cout << str_fill(" ", 34 + (progress_bar::len - 23) / 2)
+                              << str_time_start_end(note_time_min_max[trackIdx], MidiTimeMode::microsecond)
+                              << std::endl;
                 }
-                std::ofstream out(out_file);
-                for(const std::string&format:formats){
-                    out<<format<<'\t';
-                }
-                out<<std::endl;
-                if(content=="note"){
-                    const NoteMap&note_map=parser.noteMap();
-                    for_event(note_map,[&](const Note&note){
-                        for(size_t i:idx_list){
-                            switch(i){
-                                case 0:{
-                                    out<<std::dec<<note.time<<'\t';
-                                    break;
-                                }
-                                case 1:{
-                                    out<<std::hex<<std::setw(2)<<std::setfill('0')<<(int)note.track<<'\t';
-                                    break;
-                                }
-                                case 2:{
-                                    out<<std::hex<<std::setw(2)<<std::setfill('0')<<(int)note.channel<<'\t';
-                                    break;
-                                }
-                                case 3:{
-                                    out<<std::hex<<std::setw(2)<<std::setfill('0')<<(int)note.pitch<<'\t';
-                                    break;
-                                }
-                                case 4:{
-                                    out<<std::hex<<std::setw(2)<<std::setfill('0')<<(int)note.velocity<<'\t';
-                                    break;
-                                }
-                                case 5:{
-                                    out<<std::hex<<std::setw(2)<<std::setfill('0')<<(int)note.instrument<<'\t';
-                                    break;
-                                }
-                                case 6:{
-                                    out<<note.bar<<'\t';
-                                    break;
-                                }
-                                case 7:{
-                                    out<<note.beat<<'\t';
-                                    break;
-                                }
-                            }
-                        }
-                        out<<std::endl;
-                    });
-                }
-                else if(content=="note_pair"){
-                    const NotePairMap&note_pair_map=link_notePair(parser.noteMap());
-                    for_event(note_pair_map,[&](const NotePair&note_pair){
-                        for(size_t i:idx_list){
-                            switch(i){
-                                case 0:{
-                                    out<<std::dec<<note_pair.time<<'\t';
-                                    break;
-                                }
-                                case 1:{
-                                    out<<std::dec<<note_pair.duration<<'\t';
-                                    break;
-                                }
-                                case 2:{
-                                    out<<std::hex<<std::setw(2)<<std::setfill('0')<<(int)note_pair.track<<'\t';
-                                    break;
-                                }
-                                case 3:{
-                                    out<<std::hex<<std::setw(2)<<std::setfill('0')<<(int)note_pair.channel<<'\t';
-                                    break;
-                                }
-                                case 4:{
-                                    out<<std::hex<<std::setw(2)<<std::setfill('0')<<(int)note_pair.pitch<<'\t';
-                                    break;
-                                }
-                                case 5:{
-                                    out<<std::hex<<std::setw(2)<<std::setfill('0')<<(int)note_pair.velocity<<'\t';
-                                    break;
-                                }
-                                case 6:{
-                                    out<<std::hex<<std::setw(2)<<std::setfill('0')<<(int)note_pair.instrument<<'\t';
-                                    break;
-                                }
-                                case 7:{
-                                    out<<note_pair.bar<<'\t';
-                                    break;
-                                }
-                                case 8:{
-                                    out<<note_pair.beat<<'\t';
-                                    break;
-                                }
-                                case 9:{
-                                    out<<note_pair.bar_diff<<'\t';
-                                    break;
-                                }
-                                case 10:{
-                                    out<<note_pair.beat_diff<<'\t';
-                                    break;
-                                }
-                            }
-                        }
-                        out<<std::endl;
-                    });
-                }
-                else if(content=="barbeat"){
-                    const BarBeatMap&bar_beat_map=parser.bbMap();
-                    for_event(bar_beat_map,[&](const BarBeat&bar_beat){
-                        for(size_t i:idx_list){
-                            switch(i){
-                                case 0:{
-                                    out<<std::dec<<bar_beat.time<<'\t';
-                                    break;
-                                }
-                                case 1:{
-                                    out<<std::hex<<std::setw(2)<<std::setfill('0')<<(int)bar_beat.track<<'\t';
-                                    break;
-                                }
-                                case 2:{
-                                    out<<bar_beat.barNode<<'\t';
-                                    break;
-                                }
-                                case 3:{
-                                    out<<bar_beat.beatNode<<'\t';
-                                    break;
-                                }
-                                case 4:{
-                                    out<<std::dec<<bar_beat.denominator<<'\t';
-                                    break;
-                                }
-                                case 5:{
-                                    out<<std::dec<<bar_beat.numerator<<'\t';
-                                    break;
-                                }
-                            }
-                        }
-                        out<<std::endl;
-                    });
-                }
-                else if(content=="tempo"){
-                    const TempoMap&tempo_map=parser.tempoMap();
-                    for_event(tempo_map,[&](const Tempo&tempo){
-                        for(size_t i:idx_list){
-                            switch(i){
-                                case 0:{
-                                    out<<std::dec<<tempo.time<<'\t';
-                                    break;
-                                }
-                                case 1:{
-                                    out<<std::hex<<std::setw(2)<<std::setfill('0')<<(int)tempo.track<<'\t';
-                                    break;
-                                }
-                                case 2:{
-                                    out<<std::dec<<tempo.mispqn<<'\t';
-                                    break;
-                                }
-                                case 3:{
-                                    out<<std::dec<<tempo.timeNode<<'\t';
-                                    break;
-                                }
-                            }
-                        }
-                        out<<std::endl;
-                    });
-                }
-                
-                else if(content=="text"){
-                    const TextMap&text_map=parser.textMap();
-                    for_event(text_map,[&](const Text&text){
-                        for(size_t i:idx_list){
-                            switch(i){
-                                case 0:{
-                                    out<<std::dec<<text.time<<'\t';
-                                    break;
-                                }
-                                case 1:{
-                                    out<<std::hex<<std::setw(2)<<std::setfill('0')<<(int)text.track<<'\t';
-                                    break;
-                                }
-                                case 2:{
-                                    out<<std::hex<<std::setw(2)<<std::setfill('0')<<(int)text.type<<'\t';
-                                    break;
-                                }
-                                case 3:{
-                                    out<<text.text<<'\t';
-                                    break;
-                                }
-                            }
-                        }
-                        out<<std::endl;
-                    });
+                for (const Text& text : parser.textMap[trackIdx]) {
+                    std::cout << "        " << std::setw(25) << std::setfill(' ') << std::left
+                              << (Text::get_typeName(text.type) + ':') << safe_print(text.text) << std::endl;
                 }
             }
         });
     }
-    try{
+    try {
         app.parse(argc, argv);
     }
-    catch(CLI::ParseError& e){
+    catch (CLI::ParseError& e) {
         std::cerr << e.what() << std::endl;
         app.exit(e);
     }
-    catch(std::exception& e){
+    catch (std::exception& e) {
         std::cerr << e.what() << std::endl;
     }
     return 0;
