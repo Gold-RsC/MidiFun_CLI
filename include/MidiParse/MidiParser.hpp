@@ -178,7 +178,7 @@ protected:
                                     newBar = newBeat / 4;
                                 }
                                 bbMap[metaTrack].emplace_back(time, MidiTimeMode::tick, trackIdx, newBar, newBeat,
-                                                              event[3], 1 << event[4]);
+                                                              event[3], 1 << event[4], event[5], event[6]);
                                 break;
                             }
                             default: {
