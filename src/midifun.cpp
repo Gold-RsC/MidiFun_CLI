@@ -1,5 +1,5 @@
 #include "CLI/CLI.hpp"
-#define MIDI_CHECK_LEVEL 3
+#define MIDI_DEBUG
 #include "MidiParse/MidiParser.hpp"
 using namespace GoldType::MidiParse;
 
@@ -137,10 +137,72 @@ std::ostream& operator<<(std::ostream& os, const str_join<iterator>& join) {
     }
     return os;
 }
+
+std::map<std::string, MidiTimeMode> time_mode_map = {{"tick", MidiTimeMode::tick},
+                                                     {"microsecond", MidiTimeMode::microsecond}};
+std::map<std::string, MidiMetaType> text_type_map = {
+    {"track_text", MidiMetaType::track_text},
+    {"song_copyright", MidiMetaType::song_copyright},
+    {"track_name", MidiMetaType::track_name},
+    {"instrument_name", MidiMetaType::instrument_name},
+    {"lyric", MidiMetaType::lyric},
+    {"marker", MidiMetaType::marker},
+    {"start_point", MidiMetaType::start_point},
+    {"program_name", MidiMetaType::program_name},
+    {"device_name", MidiMetaType::device_name},
+};
+
+enum class NoteVariable : uint8_t {
+    time = 0,
+    track = 1,
+    channel = 2,
+    pitch = 3,
+    velocity = 4,
+    instrument = 5,
+    bar = 6,
+    beat = 7
+};
+std::map<std::string, NoteVariable> note_content_map{
+    {"time", NoteVariable::time},   {"track", NoteVariable::track},       {"channel", NoteVariable::channel},
+    {"pitch", NoteVariable::pitch}, {"velocity", NoteVariable::velocity}, {"instrument", NoteVariable::instrument},
+    {"bar", NoteVariable::bar},     {"beat", NoteVariable::beat},
+};
+enum class NotePairVariable : uint8_t {
+    time = 0,
+    track = 1,
+    channel = 2,
+    pitch = 3,
+    velocity = 4,
+    instrument = 5,
+    bar = 6,
+    beat = 7,
+    duration = 8,
+    bar_diff = 9,
+    beat_diff = 10
+};
+std::map<std::string, NotePairVariable> notepair_content_map{
+    {"time", NotePairVariable::time},         {"track", NotePairVariable::track},
+    {"channel", NotePairVariable::channel},   {"pitch", NotePairVariable::pitch},
+    {"velocity", NotePairVariable::velocity}, {"instrument", NotePairVariable::instrument},
+    {"bar", NotePairVariable::bar},           {"beat", NotePairVariable::beat},
+};
 int main(int argc, char** argv) {
     CLI::App app{"MidiFun, a tool to parse midi file and print as other format"};
     // -v,--version
     app.set_version_flag("-v,--version", VERSION);
+
+
+    // Add this after having fixed bugs
+    // enum class ExportFormat : uint8_t {
+    //     table,
+    //     json
+    // };
+    // std::map<std::string, ExportFormat> export_formats_map;
+    // std::string content;
+    // parse->add_option("--format", content, "out file format")
+    //     ->default_val("table")
+    //     ->transform(CLI::Transformer(export_formats_map));
+
 
     SUBCOMMAND(version) {
         auto version = app.add_subcommand("version", "Get version");
@@ -148,55 +210,41 @@ int main(int argc, char** argv) {
         version->callback([&] { std::cout << "Version: " VERSION << std::endl; });
     }
     SUBCOMMAND(info) {
-        auto info = app.add_subcommand("info", "Get MIDI info");
+        auto subcommand = app.add_subcommand("info", "Get MIDI info");
         std::string filepath;
-        info->add_option("filepath", filepath, "Input MIDI file path")->required()->check(CLI::ExistingFile);
+        subcommand->add_option("filepath", filepath, "Input MIDI file path")->required()->check(CLI::ExistingFile);
 
         bool verbose = false;
-        info->add_flag("-v,--verbose", verbose, "Print verbose info")->default_val(false);
+        subcommand->add_flag("-v,--verbose", verbose, "Print verbose info")->default_val(false);
         bool print_head = false;
-        info->add_flag("--head", print_head, "Print head info")->default_val(false);
+        subcommand->add_flag("--head", print_head, "Print head info")->default_val(false);
         bool print_track = false;
-        info->add_flag("--track", print_track, "Print track info")->default_val(false);
+        subcommand->add_flag("--track", print_track, "Print track info")->default_val(false);
         bool print_time = false;
-        info->add_flag("--time", print_time, "Print time info")->default_val(false);
+        subcommand->add_flag("--time", print_time, "Print time info")->default_val(false);
         bool print_text = false;
-        info->add_flag("--text", print_text, "Print text info")->default_val(false);
+        subcommand->add_flag("--text", print_text, "Print text info")->default_val(false);
         bool print_note = false;
-        info->add_flag("--note", print_note, "Print note info")->default_val(false);
+        subcommand->add_flag("--note", print_note, "Print note info")->default_val(false);
         bool print_bpm = false;
-        info->add_flag("--bpm", print_bpm, "Print bpm info")->default_val(false);
+        subcommand->add_flag("--bpm", print_bpm, "Print bpm info")->default_val(false);
         bool print_channel = false;
-        info->add_flag("--channel", print_channel, "Print channel info")->default_val(false);
-        std::map<std::string, MidiTimeMode> time_mode_map = {
-            {"second", MidiTimeMode::microsecond},
-            {"tick", MidiTimeMode::tick},
-        };
+        subcommand->add_flag("--channel", print_channel, "Print channel info")->default_val(false);
         MidiTimeMode time_mode;
-        info->add_option("--time-mode", time_mode, "Time mode")
+        subcommand->add_option("--time-mode", time_mode, "Time mode")
             ->default_val(MidiTimeMode::microsecond)
             ->transform(CLI::Transformer(time_mode_map));
-        info->add_option("--time-bar", progress_bar::len, "Length of time bar")->default_val(50);
+        subcommand->add_option("--time-bar", progress_bar::len, "Length of time bar")->default_val(50);
 
-        std::map<std::string, MidiMetaType> text_type_map = {
-            {"track_text", MidiMetaType::track_text},
-            {"song_copyright", MidiMetaType::song_copyright},
-            {"track_name", MidiMetaType::track_name},
-            {"instrument_name", MidiMetaType::instrument_name},
-            {"lyric", MidiMetaType::lyric},
-            {"marker", MidiMetaType::marker},
-            {"start_point", MidiMetaType::start_point},
-            {"program_name", MidiMetaType::program_name},
-            {"device_name", MidiMetaType::device_name},
-        };
+
         std::unordered_set<MidiMetaType> text_type_set;
-        info->add_option("--text-type", text_type_set, "Text type")
+        subcommand->add_option("--text-type", text_type_set, "Text type")
             ->transform(CLI::Transformer(text_type_map))
             ->expected(1, text_type_map.size())
             ->delimiter(',');
 
-        info->callback([&filepath, &verbose, &print_head, &print_track, &print_time, &print_text, &print_note,
-                        &print_channel, &time_mode, &text_type_set, &print_bpm] {
+        subcommand->callback([&filepath, &verbose, &print_head, &print_track, &print_time, &print_text, &print_note,
+                              &print_channel, &time_mode, &text_type_set, &print_bpm] {
             for (MidiMetaType type : text_type_set) {
                 std::cout << Text::get_typeName(type) << uint32_t(type) << std::endl;
             }
@@ -362,7 +410,171 @@ int main(int argc, char** argv) {
             }
         });
     }
+    SUBCOMMAND(note) {
+        auto subcommand = app.add_subcommand("note", "Get MIDI notes");
 
+        std::string filepath;
+        subcommand->add_option("filepath", filepath, "Input MIDI file path")->required()->check(CLI::ExistingFile);
+
+        bool verbose = false;
+        subcommand->add_flag("-v,--verbose", verbose, "Print verbose info")->default_val(false);
+
+        MidiTimeMode time_mode;
+        subcommand->add_option("--time-mode", time_mode, "Time mode")
+            ->default_val(MidiTimeMode::microsecond)
+            ->transform(CLI::Transformer(time_mode_map));
+
+
+        std::vector<NoteVariable> contents;
+
+        subcommand->add_option("--content", contents, "Content to print")
+            ->transform(CLI::Transformer(note_content_map))
+            ->expected(1, -1)
+            ->delimiter(',');
+
+        subcommand->callback([&filepath, &verbose, &time_mode, &contents] {
+            if (verbose) {
+                contents = {NoteVariable::time,  NoteVariable::track,    NoteVariable::channel,
+                            NoteVariable::pitch, NoteVariable::velocity, NoteVariable::instrument,
+                            NoteVariable::bar,   NoteVariable::beat};
+            }
+            MidiParser parser(filepath, time_mode);
+            parser.noteMap.for_event([&time_mode, &contents](const Note& note) {
+                for (NoteVariable content : contents) {
+                    switch (content) {
+                        case NoteVariable::time: {
+                            std::cout << note.time << '\t';
+                            break;
+                        }
+                        case NoteVariable::track: {
+                            std::cout << (uint32_t)note.track << '\t';
+                            break;
+                        }
+                        case NoteVariable::channel: {
+                            std::cout << (uint32_t)note.channel << '\t';
+                            break;
+                        }
+                        case NoteVariable::pitch: {
+                            std::cout << (uint32_t)note.pitch << '\t';
+                            break;
+                        }
+                        case NoteVariable::velocity: {
+                            std::cout << (uint32_t)note.velocity << '\t';
+                            break;
+                        }
+                        case NoteVariable::instrument: {
+                            std::cout << (uint32_t)note.instrument << '\t';
+                            break;
+                        }
+                        case NoteVariable::bar: {
+                            std::cout << std::fixed << std::setprecision(4) << note.bar << '\t';
+                            break;
+                        }
+                        case NoteVariable::beat: {
+                            std::cout << std::fixed << std::setprecision(4) << note.beat << '\t';
+                            break;
+                        }
+                        default: {
+                            std::cerr << "Unknown content: " << (uint32_t)content << std::endl;
+                            break;
+                        }
+                    }
+                }
+                if (!contents.empty()) {
+                    std::cout << std::endl;
+                }
+            });
+        });
+    }
+    SUBCOMMAND(notepair) {
+        auto subcommand = app.add_subcommand("notepair", "Get MIDI note pairs");
+
+        std::string filepath;
+        subcommand->add_option("filepath", filepath, "Input MIDI file path")->required()->check(CLI::ExistingFile);
+
+        bool verbose = false;
+        subcommand->add_flag("-v,--verbose", verbose, "Print verbose info")->default_val(false);
+
+        MidiTimeMode time_mode;
+        subcommand->add_option("--time-mode", time_mode, "Time mode")
+            ->default_val(MidiTimeMode::microsecond)
+            ->transform(CLI::Transformer(time_mode_map));
+
+
+        std::vector<NotePairVariable> contents;
+
+        subcommand->add_option("--content", contents, "Content to print")
+            ->transform(CLI::Transformer(notepair_content_map))
+            ->expected(1, -1)
+            ->delimiter(',');
+
+        subcommand->callback([&filepath, &verbose, &time_mode, &contents] {
+            if (verbose) {
+                contents = {NotePairVariable::time,       NotePairVariable::duration, NotePairVariable::track,
+                            NotePairVariable::channel,    NotePairVariable::pitch,    NotePairVariable::velocity,
+                            NotePairVariable::instrument, NotePairVariable::bar,      NotePairVariable::beat,
+                            NotePairVariable::bar_diff,   NotePairVariable::beat_diff};
+            }
+            MidiParser parser(filepath, time_mode);
+            link_notePair(parser.noteMap).for_event([&time_mode, &contents](const NotePair& notePair) {
+                for (NotePairVariable content : contents) {
+                    switch (content) {
+                        case NotePairVariable::time: {
+                            std::cout << notePair.time << '\t';
+                            break;
+                        }
+                        case NotePairVariable::track: {
+                            std::cout << (uint32_t)notePair.track << '\t';
+                            break;
+                        }
+                        case NotePairVariable::channel: {
+                            std::cout << (uint32_t)notePair.channel << '\t';
+                            break;
+                        }
+                        case NotePairVariable::pitch: {
+                            std::cout << (uint32_t)notePair.pitch << '\t';
+                            break;
+                        }
+                        case NotePairVariable::velocity: {
+                            std::cout << (uint32_t)notePair.velocity << '\t';
+                            break;
+                        }
+                        case NotePairVariable::instrument: {
+                            std::cout << (uint32_t)notePair.instrument << '\t';
+                            break;
+                        }
+                        case NotePairVariable::bar: {
+                            std::cout << std::fixed << std::setprecision(4) << notePair.bar << '\t';
+                            break;
+                        }
+                        case NotePairVariable::beat: {
+                            std::cout << std::fixed << std::setprecision(4) << notePair.beat << '\t';
+                            break;
+                        }
+                        case NotePairVariable::duration: {
+                            std::cout << notePair.duration << '\t';
+                            break;
+                        }
+                        case NotePairVariable::bar_diff: {
+                            std::cout << std::fixed << std::setprecision(4) << notePair.bar_diff << '\t';
+                            break;
+                        }
+                        case NotePairVariable::beat_diff: {
+                            std::cout << std::fixed << std::setprecision(4) << notePair.beat_diff << '\t';
+                            break;
+                        }
+                        default: {
+                            std::cerr << "Unknown content: " << (uint32_t)content << std::endl;
+                            break;
+                        }
+                    }
+                }
+                if (!contents.empty()) {
+                    std::cout << std::endl;
+                }
+            });
+        });
+    }
     try {
         app.parse(argc, argv);
     }
