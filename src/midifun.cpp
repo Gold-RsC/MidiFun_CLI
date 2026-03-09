@@ -162,11 +162,38 @@ int main(int argc, char** argv) {
         info->add_flag("--note", print_note, "Print note info")->default_val(false);
         bool print_channel = false;
         info->add_flag("--channel", print_channel, "Print channel info")->default_val(false);
-
+        std::map<std::string, MidiTimeMode> time_mode_map = {
+            {"second", MidiTimeMode::microsecond},
+            {"tick", MidiTimeMode::tick},
+        };
+        MidiTimeMode time_mode;
+        info->add_option("--time-mode", time_mode, "Time mode")
+            ->default_val(MidiTimeMode::microsecond)
+            ->transform(CLI::Transformer(time_mode_map));
         info->add_option("--time-bar", progress_bar::len, "Length of time bar")->default_val(50);
 
+        std::map<std::string, MidiMetaType> text_type_map = {
+            {"track_text", MidiMetaType::track_text},
+            {"song_copyright", MidiMetaType::song_copyright},
+            {"track_name", MidiMetaType::track_name},
+            {"instrument_name", MidiMetaType::instrument_name},
+            {"lyric", MidiMetaType::lyric},
+            {"marker", MidiMetaType::marker},
+            {"start_point", MidiMetaType::start_point},
+            {"program_name", MidiMetaType::program_name},
+            {"device_name", MidiMetaType::device_name},
+        };
+        std::unordered_set<MidiMetaType> text_type_set;
+        info->add_option("--text-type", text_type_set, "Text type")
+            ->transform(CLI::Transformer(text_type_map))
+            ->expected(1, text_type_map.size())
+            ->delimiter(',');
+
         info->callback([&filepath, &verbose, &print_head, &print_track, &print_time, &print_text, &print_note,
-                        &print_channel] {
+                        &print_channel, &time_mode, &text_type_set] {
+            for (MidiMetaType type : text_type_set) {
+                std::cout << Text::get_typeName(type) << uint32_t(type) << std::endl;
+            }
             if (verbose) {
                 print_head = true;
                 print_track = true;
@@ -178,10 +205,12 @@ int main(int argc, char** argv) {
             MidiFile file(filepath);
             file.read();
 
-            MidiParser parser(file, MidiTimeMode::microsecond);
+            MidiParser parser(file, time_mode);
             MidiTrackList tracks_microsecond = file.tracks;
             tracks_microsecond.to_abs();
-            parser.change_timeMode(tracks_microsecond, MidiTimeMode::microsecond);
+            if (time_mode == MidiTimeMode::microsecond) {
+                parser.change_timeMode(tracks_microsecond, MidiTimeMode::microsecond);
+            }
 
             std::vector<std::pair<MidiTime, MidiTime>> note_time_min_max(tracks_microsecond.size(),
                                                                          std::pair<MidiTime, MidiTime>{});
@@ -230,7 +259,7 @@ int main(int argc, char** argv) {
                 std::cout << "    Song Time:                   " << progress_bar(song_time_min_max, song_time_min_max)
                           << std::endl;
                 std::cout << str_fill(" ", 34 + (progress_bar::len - 23) / 2)
-                          << str_time_start_end(song_time_min_max, MidiTimeMode::microsecond) << std::endl;
+                          << str_time_start_end(song_time_min_max, time_mode) << std::endl;
             }
             std::cout << "    Events Counts:               " << events_num << std::endl;
             if (print_note) {
@@ -258,16 +287,14 @@ int main(int argc, char** argv) {
                         std::cout << "        Track Time:             "
                                   << progress_bar(track_time_min_max[trackIdx], song_time_min_max) << std::endl;
                         std::cout << str_fill(" ", 34 + (progress_bar::len - 23) / 2)
-                                  << str_time_start_end(track_time_min_max[trackIdx], MidiTimeMode::microsecond)
-                                  << std::endl;
+                                  << str_time_start_end(track_time_min_max[trackIdx], time_mode) << std::endl;
                     }
                     if (print_time && print_note &&
                         note_time_min_max[trackIdx].first <= note_time_min_max[trackIdx].second) {
                         std::cout << "        Note Time:              "
                                   << progress_bar(note_time_min_max[trackIdx], song_time_min_max) << std::endl;
                         std::cout << str_fill(" ", 34 + (progress_bar::len - 23) / 2)
-                                  << str_time_start_end(note_time_min_max[trackIdx], MidiTimeMode::microsecond)
-                                  << std::endl;
+                                  << str_time_start_end(note_time_min_max[trackIdx], time_mode) << std::endl;
                     }
                     if (print_channel) {
                         auto cmp = [](const std::pair<size_t, MidiChannelNum>& a,
@@ -294,9 +321,11 @@ int main(int argc, char** argv) {
                     }
                     if (print_text) {
                         for (const Text& text : parser.textMap[trackIdx]) {
-                            std::cout << "        " << std::setw(25) << std::setfill(' ') << std::left
-                                      << ("Text (" + Text::get_typeName(text.type) + "):") << safe_print(text.text)
-                                      << std::endl;
+                            if (text_type_set.empty() || text_type_set.find(text.type) != text_type_set.end()) {
+                                std::cout << "        " << std::setw(25) << std::setfill(' ') << std::left
+                                          << ("Text (" + Text::get_typeName(text.type) + "):") << safe_print(text.text)
+                                          << std::endl;
+                            }
                         }
                     }
                 }
