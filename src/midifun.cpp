@@ -114,6 +114,25 @@ std::ostream& operator<<(std::ostream& os, const progress_bar& bar) {
     os << '[' << str_fill(".", a) << str_fill("¨€", b) << str_fill(".", c) << ']';
     return os;
 }
+template <typename iterator>
+struct str_join {
+    std::pair<iterator, iterator> range;
+    std::string step;
+    str_join(std::pair<iterator, iterator> _range, std::string _step)
+        : range(_range),
+          step(_step) {
+    }
+};
+template <typename iterator>
+std::ostream& operator<<(std::ostream& os, const str_join<iterator>& join) {
+    for (iterator it = join.range.first; it != join.range.second; ++it) {
+        if (it != join.range.first) {
+            os << join.step;
+        }
+        os << *it;
+    }
+    return os;
+}
 int main(int argc, char** argv) {
     CLI::App app{"MidiFun, a tool to parse midi file and print as other format"};
     // -v,--version
@@ -129,8 +148,33 @@ int main(int argc, char** argv) {
         std::string filepath;
         info->add_option("filepath", filepath, "Input MIDI file path")->required()->check(CLI::ExistingFile);
 
+        bool verbose = false;
+        info->add_flag("-v,--verbose", verbose, "Print verbose info")->default_val(false);
+        bool print_head = false;
+        info->add_flag("--head", print_head, "Print head info")->default_val(false);
+        bool print_track = false;
+        info->add_flag("--track", print_track, "Print track info")->default_val(false);
+        bool print_time = false;
+        info->add_flag("--time", print_time, "Print time info")->default_val(false);
+        bool print_text = false;
+        info->add_flag("--text", print_text, "Print text info")->default_val(false);
+        bool print_note = false;
+        info->add_flag("--note", print_note, "Print note info")->default_val(false);
+        bool print_channel = false;
+        info->add_flag("--channel", print_channel, "Print channel info")->default_val(false);
 
-        info->callback([&filepath] {
+        info->add_option("--time-bar", progress_bar::len, "Length of time bar")->default_val(50);
+
+        info->callback([&filepath, &verbose, &print_head, &print_track, &print_time, &print_text, &print_note,
+                        &print_channel] {
+            if (verbose) {
+                print_head = true;
+                print_track = true;
+                print_time = true;
+                print_text = true;
+                print_note = true;
+                print_channel = true;
+            }
             MidiFile file(filepath);
             file.read();
 
@@ -139,9 +183,11 @@ int main(int argc, char** argv) {
             tracks_microsecond.to_abs();
             parser.change_timeMode(tracks_microsecond, MidiTimeMode::microsecond);
 
-            std::array<std::pair<MidiTime, MidiTime>, 128> note_time_min_max = {};
-            std::array<std::pair<MidiTime, MidiTime>, 128> track_time_min_max = {};
-            for (size_t i = 0; i < 128; ++i) {
+            std::vector<std::pair<MidiTime, MidiTime>> note_time_min_max(tracks_microsecond.size(),
+                                                                         std::pair<MidiTime, MidiTime>{});
+            std::vector<std::pair<MidiTime, MidiTime>> track_time_min_max(tracks_microsecond.size(),
+                                                                          std::pair<MidiTime, MidiTime>{});
+            for (size_t i = 0; i < tracks_microsecond.size(); ++i) {
                 note_time_min_max[i] = {std::numeric_limits<MidiTime>::max(), std::numeric_limits<MidiTime>::min()};
                 track_time_min_max[i] = {std::numeric_limits<MidiTime>::max(), std::numeric_limits<MidiTime>::min()};
             }
@@ -165,42 +211,99 @@ int main(int argc, char** argv) {
                 song_time_min_max = {0, 0};
             }
 
+            size_t events_num = 0;
+            tracks_microsecond.for_list([&events_num](const MidiTrack& l) { events_num += l.size(); });
+            size_t notes_num = 0;
+            parser.noteMap.for_list([&notes_num](const NoteList& n) { notes_num += n.size(); });
+
+            std::vector<std::array<size_t, 16>> track_channel_count_map(tracks_microsecond.size(),
+                                                                        std::array<size_t, 16>{});
+            tracks_microsecond.for_event([&track_channel_count_map](const MidiEvent& e) {
+                if (e.is_normal()) {
+                    ++track_channel_count_map[e.track][e.channel()];
+                }
+            });
+
             std::cout << "MIDI info:" << std::endl;
             std::cout << "    Filepath:                    " << filepath << std::endl;
-            std::cout << "    Head:" << std::endl;
-            std::cout << "        Format:                  " << file.head.format << std::endl;
-            std::cout << "        Num Of Tracks:           " << file.head.ntracks << std::endl;
-            std::cout << "        Ticks Per Quarter Note:  " << file.head.tpqn() << std::endl;
-            std::cout << "        (Division):              " << file.head.division << std::endl;
-            std::cout << "        Song Time:               " << progress_bar(song_time_min_max, song_time_min_max)
-                      << std::endl;
-            std::cout << str_fill(" ", 34 + (progress_bar::len - 23) / 2)
-                      << str_time_start_end(song_time_min_max, MidiTimeMode::microsecond) << std::endl;
-            for (MidiTrackList::const_iterator it = tracks_microsecond.cbegin(); it != tracks_microsecond.cend();
-                 ++it) {
-                MidiTrackNum trackIdx = it - tracks_microsecond.cbegin();
-                std::cout << "    Track " << (uint32_t)trackIdx << ":" << std::endl;
-                if (track_time_min_max[trackIdx].first <= track_time_min_max[trackIdx].second) {
-                    std::cout << "        Track Time:             "
-                              << progress_bar(track_time_min_max[trackIdx], song_time_min_max) << std::endl;
-                    std::cout << str_fill(" ", 34 + (progress_bar::len - 23) / 2)
-                              << str_time_start_end(track_time_min_max[trackIdx], MidiTimeMode::microsecond)
-                              << std::endl;
-                }
-                if (note_time_min_max[trackIdx].first <= note_time_min_max[trackIdx].second) {
-                    std::cout << "        Note Time:              "
-                              << progress_bar(note_time_min_max[trackIdx], song_time_min_max) << std::endl;
-                    std::cout << str_fill(" ", 34 + (progress_bar::len - 23) / 2)
-                              << str_time_start_end(note_time_min_max[trackIdx], MidiTimeMode::microsecond)
-                              << std::endl;
-                }
-                for (const Text& text : parser.textMap[trackIdx]) {
-                    std::cout << "        " << std::setw(25) << std::setfill(' ') << std::left
-                              << (Text::get_typeName(text.type) + ':') << safe_print(text.text) << std::endl;
+            if (print_time) {
+                std::cout << "    Song Time:                   " << progress_bar(song_time_min_max, song_time_min_max)
+                          << std::endl;
+                std::cout << str_fill(" ", 34 + (progress_bar::len - 23) / 2)
+                          << str_time_start_end(song_time_min_max, MidiTimeMode::microsecond) << std::endl;
+            }
+            std::cout << "    Events Counts:               " << events_num << std::endl;
+            if (print_note) {
+                std::cout << "    Notes Counts:                " << notes_num << std::endl;
+            }
+
+            if (print_head) {
+                std::cout << "    Head:" << std::endl;
+                std::cout << "        Format:                  " << file.head.format << std::endl;
+                std::cout << "        Tracks Counts:           " << file.head.ntracks << std::endl;
+                std::cout << "        Ticks Per Quarter Note:  " << file.head.tpqn() << std::endl;
+                std::cout << "        (Division):              " << file.head.division << std::endl;
+            }
+            if (print_track) {
+                for (MidiTrackList::const_iterator it = tracks_microsecond.cbegin(); it != tracks_microsecond.cend();
+                     ++it) {
+                    MidiTrackNum trackIdx = it - tracks_microsecond.cbegin();
+                    std::cout << "    Track " << (uint32_t)trackIdx << ":" << std::endl;
+                    std::cout << "        Events Counts:           " << it->size() << std::endl;
+                    if (print_note) {
+                        std::cout << "        Notes Counts:            " << parser.noteMap[trackIdx].size()
+                                  << std::endl;
+                    }
+                    if (print_time && track_time_min_max[trackIdx].first <= track_time_min_max[trackIdx].second) {
+                        std::cout << "        Track Time:             "
+                                  << progress_bar(track_time_min_max[trackIdx], song_time_min_max) << std::endl;
+                        std::cout << str_fill(" ", 34 + (progress_bar::len - 23) / 2)
+                                  << str_time_start_end(track_time_min_max[trackIdx], MidiTimeMode::microsecond)
+                                  << std::endl;
+                    }
+                    if (print_time && print_note &&
+                        note_time_min_max[trackIdx].first <= note_time_min_max[trackIdx].second) {
+                        std::cout << "        Note Time:              "
+                                  << progress_bar(note_time_min_max[trackIdx], song_time_min_max) << std::endl;
+                        std::cout << str_fill(" ", 34 + (progress_bar::len - 23) / 2)
+                                  << str_time_start_end(note_time_min_max[trackIdx], MidiTimeMode::microsecond)
+                                  << std::endl;
+                    }
+                    if (print_channel) {
+                        auto cmp = [](const std::pair<size_t, MidiChannelNum>& a,
+                                      const std::pair<size_t, MidiChannelNum>& b) {
+                            return a.first < b.first || (a.first == b.first && a.second > b.second);
+                        };
+                        std::priority_queue<std::pair<size_t, MidiChannelNum>,
+                                            std::vector<std::pair<size_t, MidiChannelNum>>, decltype(cmp)>
+                            pq(cmp);
+                        for (MidiChannelNum a = 0; a < track_channel_count_map[trackIdx].size(); ++a) {
+                            if (track_channel_count_map[trackIdx][a] > 0) {
+                                pq.push({track_channel_count_map[trackIdx][a], a});
+                            }
+                        }
+                        if (!pq.empty()) {
+                            std::cout << "        Channels (Event Counts): " << (uint32_t)pq.top().second << " ("
+                                      << pq.top().first << ") " << std::endl;
+                            pq.pop();
+                            for (; !pq.empty(); pq.pop()) {
+                                std::cout << "                                 " << (uint32_t)pq.top().second << " ("
+                                          << pq.top().first << ") " << std::endl;
+                            }
+                        }
+                    }
+                    if (print_text) {
+                        for (const Text& text : parser.textMap[trackIdx]) {
+                            std::cout << "        " << std::setw(25) << std::setfill(' ') << std::left
+                                      << ("Text (" + Text::get_typeName(text.type) + "):") << safe_print(text.text)
+                                      << std::endl;
+                        }
+                    }
                 }
             }
         });
     }
+
     try {
         app.parse(argc, argv);
     }
