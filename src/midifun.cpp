@@ -7,59 +7,6 @@ using namespace GoldType::MidiParse;
 
 #define SUBCOMMAND(...)
 
-std::string export_filepath;
-bool is_allow_overwrite = false;
-class ExportStream {
-private:
-    std::ostream* out_stream;
-    std::ofstream export_stream;
-    bool confirm;
-
-public:
-    ExportStream(void)
-        : out_stream(&std::cout),
-          confirm(false) {
-        if (!export_filepath.empty()) {
-            bool file_exists = true;
-            std::ifstream infile(export_filepath);
-            file_exists = infile.good();
-            infile.close();
-            if (file_exists && !is_allow_overwrite) {
-                std::cout << "File " << export_filepath << " exists. Do you want to overwrite it? (y/n)" << std::endl;
-                char answer;
-                std::cin >> answer;
-                if ((answer != 'y' && answer != 'Y') || std::cin.fail()) {
-                    std::cout << "Abort." << std::endl;
-                    confirm = false;
-                    return;
-                }
-            }
-            std::cout << "Exporting to " << export_filepath << std::endl;
-            export_stream.open(export_filepath, std::ios::out | std::ios::trunc);
-            out_stream = &export_stream;
-        }
-        confirm = true;
-    }
-    ~ExportStream(void) {
-        if (out_stream != &std::cout) {
-            std::cout << "Export finished." << std::endl;
-            export_stream.close();
-        }
-    }
-    bool is_confirmed(void) {
-        return confirm;
-    }
-    std::ostream& get_stream(void) {
-        return *out_stream;
-    }
-};
-template <typename T>
-std::ostream& operator<<(ExportStream& os, T&& _t) {
-    return os.get_stream() << std::forward<T>(_t);
-}
-std::ostream& operator<<(ExportStream& os, std::ostream& (*manip)(std::ostream&)) {
-    return os.get_stream() << manip;
-}
 
 struct str_time {
     MidiTime time;
@@ -246,9 +193,6 @@ int main(int argc, char** argv) {
     // -v,--version
     app.set_version_flag("-v,--version", VERSION);
 
-    app.add_option("--export", export_filepath, "Export filepath");
-    app.add_flag("--export-overwrite", is_allow_overwrite, "Overwrite existing file")->default_val(false);
-
     // Add this after having fixed bugs
     // enum class ExportFormat : uint8_t {
     //     table,
@@ -302,10 +246,6 @@ int main(int argc, char** argv) {
 
         subcommand->callback([&filepath, &verbose, &print_head, &print_track, &print_time, &print_text, &print_note,
                               &print_channel, &time_mode, &text_type_set, &print_bpm] {
-            ExportStream os;
-            if (!os.is_confirmed()) {
-                return;
-            }
             if (verbose) {
                 print_head = true;
                 print_track = true;
@@ -366,67 +306,69 @@ int main(int argc, char** argv) {
                 }
             });
             BpmMap bpmMap = generate_bpmMap(parser.tempoMap, parser.bbMap);
-            os << "MIDI info:" << std::endl;
-            os << "    Filepath:                    " << filepath << std::endl;
+            std::cout << "MIDI info:" << std::endl;
+            std::cout << "    Filepath:                    " << filepath << std::endl;
             if (print_time) {
-                os << "    Song Time:                   " << progress_bar(song_time_min_max, song_time_min_max)
-                   << std::endl;
-                os << str_fill(" ", 34 + (progress_bar::len - 23) / 2)
-                   << str_time_start_end(song_time_min_max, time_mode) << std::endl;
+                std::cout << "    Song Time:                   " << progress_bar(song_time_min_max, song_time_min_max)
+                          << std::endl;
+                std::cout << str_fill(" ", 34 + (progress_bar::len - 23) / 2)
+                          << str_time_start_end(song_time_min_max, time_mode) << std::endl;
             }
-            os << "    Events Counts:               " << events_num << std::endl;
+            std::cout << "    Events Counts:               " << events_num << std::endl;
             if (print_note) {
-                os << "    Notes Counts:                " << notes_num << std::endl;
+                std::cout << "    Notes Counts:                " << notes_num << std::endl;
             }
 
             if (print_head) {
-                os << "    Head:" << std::endl;
-                os << "        Format:                  " << file.head.format << std::endl;
-                os << "        Tracks Counts:           " << file.head.ntracks << std::endl;
-                os << "        Ticks Per Quarter Note:  " << file.head.tpqn() << std::endl;
-                os << "        (Division):              " << file.head.division << std::endl;
+                std::cout << "    Head:" << std::endl;
+                std::cout << "        Format:                  " << file.head.format << std::endl;
+                std::cout << "        Tracks Counts:           " << file.head.ntracks << std::endl;
+                std::cout << "        Ticks Per Quarter Note:  " << file.head.tpqn() << std::endl;
+                std::cout << "        (Division):              " << file.head.division << std::endl;
             }
             if (print_track) {
                 for (MidiTrackList::const_iterator track_it = tracks_microsecond.cbegin();
                      track_it != tracks_microsecond.cend(); ++track_it) {
                     MidiTrackNum trackIdx = track_it - tracks_microsecond.cbegin();
-                    os << "    Track " << (uint32_t)trackIdx << ":" << std::endl;
-                    os << "        Events Counts:           " << track_it->size() << std::endl;
+                    std::cout << "    Track " << (uint32_t)trackIdx << ":" << std::endl;
+                    std::cout << "        Events Counts:           " << track_it->size() << std::endl;
                     if (print_note) {
-                        os << "        Notes Counts:            " << parser.noteMap[trackIdx].size() << std::endl;
+                        std::cout << "        Notes Counts:            " << parser.noteMap[trackIdx].size()
+                                  << std::endl;
                     }
                     if (print_time && track_time_min_max[trackIdx].first <= track_time_min_max[trackIdx].second) {
-                        os << "        Track Time:             "
-                           << progress_bar(track_time_min_max[trackIdx], song_time_min_max) << std::endl;
-                        os << str_fill(" ", 34 + (progress_bar::len - 23) / 2)
-                           << str_time_start_end(track_time_min_max[trackIdx], time_mode) << std::endl;
+                        std::cout << "        Track Time:             "
+                                  << progress_bar(track_time_min_max[trackIdx], song_time_min_max) << std::endl;
+                        std::cout << str_fill(" ", 34 + (progress_bar::len - 23) / 2)
+                                  << str_time_start_end(track_time_min_max[trackIdx], time_mode) << std::endl;
                     }
                     if (print_time && print_note &&
                         note_time_min_max[trackIdx].first <= note_time_min_max[trackIdx].second) {
-                        os << "        Note Time:              "
-                           << progress_bar(note_time_min_max[trackIdx], song_time_min_max) << std::endl;
-                        os << str_fill(" ", 34 + (progress_bar::len - 23) / 2)
-                           << str_time_start_end(note_time_min_max[trackIdx], time_mode) << std::endl;
+                        std::cout << "        Note Time:              "
+                                  << progress_bar(note_time_min_max[trackIdx], song_time_min_max) << std::endl;
+                        std::cout << str_fill(" ", 34 + (progress_bar::len - 23) / 2)
+                                  << str_time_start_end(note_time_min_max[trackIdx], time_mode) << std::endl;
                     }
                     if (print_bpm && trackIdx < bpmMap.size() && !bpmMap[trackIdx].empty()) {
                         if (print_time) {
-                            os << "        BPM                      "
-                               << str_fill(" ", progress_bar::get_pos(bpmMap[trackIdx].front().time, song_time_min_max))
-                               << "^ " << std::fixed << std::setprecision(2) << bpmMap[trackIdx].front().bpm
-                               << std::endl;
+                            std::cout << "        BPM                      "
+                                      << str_fill(" ", progress_bar::get_pos(bpmMap[trackIdx].front().time,
+                                                                             song_time_min_max))
+                                      << "^ " << std::fixed << std::setprecision(2) << bpmMap[trackIdx].front().bpm
+                                      << std::endl;
                             for (auto it = bpmMap[trackIdx].begin() + 1; it != bpmMap[trackIdx].end(); ++it) {
-                                os << "                                "
-                                   << str_fill(" ", progress_bar::get_pos(it->time, song_time_min_max)) << "^ "
-                                   << std::fixed << std::setprecision(2) << it->bpm << std::endl;
+                                std::cout << "                                "
+                                          << str_fill(" ", progress_bar::get_pos(it->time, song_time_min_max)) << "^ "
+                                          << std::fixed << std::setprecision(2) << it->bpm << std::endl;
                             }
                         }
                         else {
-                            os << "        BPM (time):              " << std::fixed << std::setprecision(2)
-                               << bpmMap[trackIdx].front().bpm << '('
-                               << str_time(bpmMap[trackIdx].front().time, time_mode) << ')' << std::endl;
+                            std::cout << "        BPM (time):              " << std::fixed << std::setprecision(2)
+                                      << bpmMap[trackIdx].front().bpm << '('
+                                      << str_time(bpmMap[trackIdx].front().time, time_mode) << ')' << std::endl;
                             for (auto it = bpmMap[trackIdx].begin() + 1; it != bpmMap[trackIdx].end(); ++it) {
-                                os << "                                " << std::fixed << std::setprecision(2)
-                                   << it->bpm << str_time(it->time, time_mode) << std::endl;
+                                std::cout << "                                " << std::fixed << std::setprecision(2)
+                                          << it->bpm << str_time(it->time, time_mode) << std::endl;
                             }
                         }
                     }
@@ -444,21 +386,21 @@ int main(int argc, char** argv) {
                             }
                         }
                         if (!pq.empty()) {
-                            os << "        Channels (Event Counts): " << (uint32_t)pq.top().second << " ("
-                               << pq.top().first << ") " << std::endl;
+                            std::cout << "        Channels (Event Counts): " << (uint32_t)pq.top().second << " ("
+                                      << pq.top().first << ") " << std::endl;
                             pq.pop();
                             for (; !pq.empty(); pq.pop()) {
-                                os << "                                 " << (uint32_t)pq.top().second << " ("
-                                   << pq.top().first << ") " << std::endl;
+                                std::cout << "                                 " << (uint32_t)pq.top().second << " ("
+                                          << pq.top().first << ") " << std::endl;
                             }
                         }
                     }
                     if (print_text) {
                         for (const Text& text : parser.textMap[trackIdx]) {
                             if (text_type_set.empty() || text_type_set.find(text.type) != text_type_set.end()) {
-                                os << "        " << std::setw(25) << std::setfill(' ') << std::left
-                                   << ("Text (" + Text::get_typeName(text.type) + "):") << safe_print(text.text)
-                                   << std::endl;
+                                std::cout << "        " << std::setw(25) << std::setfill(' ') << std::left
+                                          << ("Text (" + Text::get_typeName(text.type) + "):") << safe_print(text.text)
+                                          << std::endl;
                             }
                         }
                     }
@@ -488,10 +430,6 @@ int main(int argc, char** argv) {
             ->delimiter(',');
 
         subcommand->callback([&filepath, &time_mode, &contents, &print_label] {
-            ExportStream os;
-            if (!os.is_confirmed()) {
-                return;
-            }
             if (contents.empty()) {
                 contents = {NoteVariable::time,  NoteVariable::track,    NoteVariable::channel,
                             NoteVariable::pitch, NoteVariable::velocity, NoteVariable::instrument,
@@ -502,35 +440,35 @@ int main(int argc, char** argv) {
                 for (NoteVariable content : contents) {
                     switch (content) {
                         case NoteVariable::time: {
-                            os << "time" << '\t';
+                            std::cout << "time" << '\t';
                             break;
                         }
                         case NoteVariable::track: {
-                            os << "track" << '\t';
+                            std::cout << "track" << '\t';
                             break;
                         }
                         case NoteVariable::channel: {
-                            os << "channel" << '\t';
+                            std::cout << "channel" << '\t';
                             break;
                         }
                         case NoteVariable::pitch: {
-                            os << "pitch" << '\t';
+                            std::cout << "pitch" << '\t';
                             break;
                         }
                         case NoteVariable::velocity: {
-                            os << "velocity" << '\t';
+                            std::cout << "velocity" << '\t';
                             break;
                         }
                         case NoteVariable::instrument: {
-                            os << "instrument" << '\t';
+                            std::cout << "instrument" << '\t';
                             break;
                         }
                         case NoteVariable::bar: {
-                            os << "bar" << '\t';
+                            std::cout << "bar" << '\t';
                             break;
                         }
                         case NoteVariable::beat: {
-                            os << "beat" << '\t';
+                            std::cout << "beat" << '\t';
                             break;
                         }
                         default: {
@@ -539,41 +477,41 @@ int main(int argc, char** argv) {
                         }
                     }
                 }
-                os << std::endl;
+                std::cout << std::endl;
             }
-            parser.noteMap.for_event([&time_mode, &contents, &os](const Note& note) {
+            parser.noteMap.for_event([&time_mode, &contents](const Note& note) {
                 for (NoteVariable content : contents) {
                     switch (content) {
                         case NoteVariable::time: {
-                            os << note.time << '\t';
+                            std::cout << note.time << '\t';
                             break;
                         }
                         case NoteVariable::track: {
-                            os << (uint32_t)note.track << '\t';
+                            std::cout << (uint32_t)note.track << '\t';
                             break;
                         }
                         case NoteVariable::channel: {
-                            os << (uint32_t)note.channel << '\t';
+                            std::cout << (uint32_t)note.channel << '\t';
                             break;
                         }
                         case NoteVariable::pitch: {
-                            os << (uint32_t)note.pitch << '\t';
+                            std::cout << (uint32_t)note.pitch << '\t';
                             break;
                         }
                         case NoteVariable::velocity: {
-                            os << (uint32_t)note.velocity << '\t';
+                            std::cout << (uint32_t)note.velocity << '\t';
                             break;
                         }
                         case NoteVariable::instrument: {
-                            os << (uint32_t)note.instrument << '\t';
+                            std::cout << (uint32_t)note.instrument << '\t';
                             break;
                         }
                         case NoteVariable::bar: {
-                            os << std::fixed << std::setprecision(4) << note.bar << '\t';
+                            std::cout << std::fixed << std::setprecision(4) << note.bar << '\t';
                             break;
                         }
                         case NoteVariable::beat: {
-                            os << std::fixed << std::setprecision(4) << note.beat << '\t';
+                            std::cout << std::fixed << std::setprecision(4) << note.beat << '\t';
                             break;
                         }
                         default: {
@@ -583,7 +521,7 @@ int main(int argc, char** argv) {
                     }
                 }
                 if (!contents.empty()) {
-                    os << std::endl;
+                    std::cout << std::endl;
                 }
             });
         });
@@ -611,10 +549,6 @@ int main(int argc, char** argv) {
             ->delimiter(',');
 
         subcommand->callback([&filepath, &time_mode, &contents, &print_label] {
-            ExportStream os;
-            if (!os.is_confirmed()) {
-                return;
-            }
             if (contents.empty()) {
                 contents = {NotePairVariable::time,       NotePairVariable::duration, NotePairVariable::track,
                             NotePairVariable::channel,    NotePairVariable::pitch,    NotePairVariable::velocity,
@@ -626,47 +560,47 @@ int main(int argc, char** argv) {
                 for (NotePairVariable content : contents) {
                     switch (content) {
                         case NotePairVariable::time: {
-                            os << "time" << '\t';
+                            std::cout << "time" << '\t';
                             break;
                         }
                         case NotePairVariable::duration: {
-                            os << "duration" << '\t';
+                            std::cout << "duration" << '\t';
                             break;
                         }
                         case NotePairVariable::track: {
-                            os << "track" << '\t';
+                            std::cout << "track" << '\t';
                             break;
                         }
                         case NotePairVariable::channel: {
-                            os << "channel" << '\t';
+                            std::cout << "channel" << '\t';
                             break;
                         }
                         case NotePairVariable::pitch: {
-                            os << "pitch" << '\t';
+                            std::cout << "pitch" << '\t';
                             break;
                         }
                         case NotePairVariable::velocity: {
-                            os << "velocity" << '\t';
+                            std::cout << "velocity" << '\t';
                             break;
                         }
                         case NotePairVariable::instrument: {
-                            os << "instrument" << '\t';
+                            std::cout << "instrument" << '\t';
                             break;
                         }
                         case NotePairVariable::bar: {
-                            os << "bar" << '\t';
+                            std::cout << "bar" << '\t';
                             break;
                         }
                         case NotePairVariable::bar_diff: {
-                            os << "bar_diff" << '\t';
+                            std::cout << "bar_diff" << '\t';
                             break;
                         }
                         case NotePairVariable::beat: {
-                            os << "beat" << '\t';
+                            std::cout << "beat" << '\t';
                             break;
                         }
                         case NotePairVariable::beat_diff: {
-                            os << "beat_diff" << '\t';
+                            std::cout << "beat_diff" << '\t';
                             break;
                         }
                         default: {
@@ -676,51 +610,51 @@ int main(int argc, char** argv) {
                     }
                 }
             }
-            link_notePair(parser.noteMap).for_event([&time_mode, &contents, &os](const NotePair& notePair) {
+            link_notePair(parser.noteMap).for_event([&time_mode, &contents](const NotePair& notePair) {
                 for (NotePairVariable content : contents) {
                     switch (content) {
                         case NotePairVariable::time: {
-                            os << notePair.time << '\t';
+                            std::cout << notePair.time << '\t';
                             break;
                         }
                         case NotePairVariable::track: {
-                            os << (uint32_t)notePair.track << '\t';
+                            std::cout << (uint32_t)notePair.track << '\t';
                             break;
                         }
                         case NotePairVariable::channel: {
-                            os << (uint32_t)notePair.channel << '\t';
+                            std::cout << (uint32_t)notePair.channel << '\t';
                             break;
                         }
                         case NotePairVariable::pitch: {
-                            os << (uint32_t)notePair.pitch << '\t';
+                            std::cout << (uint32_t)notePair.pitch << '\t';
                             break;
                         }
                         case NotePairVariable::velocity: {
-                            os << (uint32_t)notePair.velocity << '\t';
+                            std::cout << (uint32_t)notePair.velocity << '\t';
                             break;
                         }
                         case NotePairVariable::instrument: {
-                            os << (uint32_t)notePair.instrument << '\t';
+                            std::cout << (uint32_t)notePair.instrument << '\t';
                             break;
                         }
                         case NotePairVariable::bar: {
-                            os << std::fixed << std::setprecision(4) << notePair.bar << '\t';
+                            std::cout << std::fixed << std::setprecision(4) << notePair.bar << '\t';
                             break;
                         }
                         case NotePairVariable::beat: {
-                            os << std::fixed << std::setprecision(4) << notePair.beat << '\t';
+                            std::cout << std::fixed << std::setprecision(4) << notePair.beat << '\t';
                             break;
                         }
                         case NotePairVariable::duration: {
-                            os << notePair.duration << '\t';
+                            std::cout << notePair.duration << '\t';
                             break;
                         }
                         case NotePairVariable::bar_diff: {
-                            os << std::fixed << std::setprecision(4) << notePair.bar_diff << '\t';
+                            std::cout << std::fixed << std::setprecision(4) << notePair.bar_diff << '\t';
                             break;
                         }
                         case NotePairVariable::beat_diff: {
-                            os << std::fixed << std::setprecision(4) << notePair.beat_diff << '\t';
+                            std::cout << std::fixed << std::setprecision(4) << notePair.beat_diff << '\t';
                             break;
                         }
                         default: {
@@ -730,7 +664,7 @@ int main(int argc, char** argv) {
                     }
                 }
                 if (!contents.empty()) {
-                    os << std::endl;
+                    std::cout << std::endl;
                 }
             });
         });
