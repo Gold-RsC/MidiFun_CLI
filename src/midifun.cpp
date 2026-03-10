@@ -189,7 +189,7 @@ std::map<std::string, NotePairVariable> notepair_content_map{
 };
 
 int main(int argc, char** argv) {
-    CLI::App app{"MidiFun, a tool to parse midi file and print as other format"};
+    CLI::App app{"MidiFun, a tool to parse midi file easily"};
     // -v,--version
     app.set_version_flag("-v,--version", VERSION);
 
@@ -408,8 +408,8 @@ int main(int argc, char** argv) {
             }
         });
     }
-    SUBCOMMAND(note) {
-        auto subcommand = app.add_subcommand("note", "Get MIDI notes");
+    SUBCOMMAND(get_note) {
+        auto subcommand = app.add_subcommand("get-note", "Get MIDI notes");
 
         std::string filepath;
         subcommand->add_option("filepath", filepath, "Input MIDI file path")->required()->check(CLI::ExistingFile);
@@ -526,8 +526,8 @@ int main(int argc, char** argv) {
             });
         });
     }
-    SUBCOMMAND(notepair) {
-        auto subcommand = app.add_subcommand("notepair", "Get MIDI note pairs");
+    SUBCOMMAND(get_notepair) {
+        auto subcommand = app.add_subcommand("get-notepair", "Get MIDI note pairs");
 
         std::string filepath;
         subcommand->add_option("filepath", filepath, "Input MIDI file path")->required()->check(CLI::ExistingFile);
@@ -667,6 +667,19 @@ int main(int argc, char** argv) {
                     std::cout << std::endl;
                 }
             });
+        });
+    }
+    SUBCOMMAND(play) {
+        auto subcommand = app.add_subcommand("play", "Play MIDI file")->prefix_command();
+        subcommand->set_help_flag();
+
+        subcommand->callback([subcommand] {
+            const auto& args = subcommand->remaining();
+            std::string cmd = "midiplay-win.exe";
+            for (const auto& arg : args) {
+                cmd += " " + arg;
+            }
+            system(cmd.c_str());
         });
     }
     try {
