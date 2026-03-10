@@ -7,6 +7,60 @@ using namespace GoldType::MidiParse;
 
 #define SUBCOMMAND(...)
 
+std::string export_filepath;
+bool overwrite = false;
+class ExportStream {
+private:
+    std::ostream* out_stream;
+    std::ofstream export_stream;
+    bool confirm;
+
+public:
+    ExportStream(void)
+        : out_stream(&std::cout),
+          confirm(false) {
+        if (!export_filepath.empty()) {
+            bool file_exists = true;
+            std::ifstream infile(export_filepath);
+            file_exists = infile.good();
+            infile.close();
+            if (file_exists && !overwrite) {
+                std::cout << "File " << export_filepath << " exists. Do you want to overwrite it? (y/n)" << std::endl;
+                char answer;
+                std::cin >> answer;
+                if ((answer != 'y' && answer != 'Y') || std::cin.fail()) {
+                    std::cout << "Abort." << std::endl;
+                    confirm = false;
+                    return;
+                }
+            }
+            confirm = true;
+            std::cout << "Exporting to " << export_filepath << std::endl;
+            export_stream.open(export_filepath, std::ios::out | std::ios::trunc);
+            out_stream = &export_stream;
+        }
+    }
+    ~ExportStream(void) {
+        if (out_stream != &std::cout) {
+            std::cout << "Export finished." << std::endl;
+            export_stream.close();
+        }
+    }
+    bool is_confirmed(void) {
+        return confirm;
+    }
+    std::ostream& get_stream(void) {
+        return *out_stream;
+    }
+};
+template <typename T>
+std::ostream& operator<<(ExportStream& os, T&& _t) {
+    return os.get_stream() << std::forward<T>(_t);
+}
+std::ostream& operator<<(ExportStream& os, std::ostream& (*manip)(std::ostream&)) {
+    return os.get_stream() << manip;
+}
+
 struct str_time {
     MidiTime time;
     MidiTimeMode mode;
@@ -186,35 +240,7 @@ std::map<std::string, NotePairVariable> notepair_content_map{
     {"velocity", NotePairVariable::velocity}, {"instrument", NotePairVariable::instrument},
     {"bar", NotePairVariable::bar},           {"beat", NotePairVariable::beat},
 };
-std::string export_filepath;
-bool overwrite = false;
-#define init_ostream(os)                                                                                               \
-    std::ostream* out_stream = &std::cout;                                                                             \
-    std::ofstream export_stream;                                                                                       \
-    if (!export_filepath.empty()) {                                                                                    \
-        bool file_exists = true;                                                                                       \
-        std::ifstream infile(export_filepath);                                                                         \
-        file_exists = infile.good();                                                                                   \
-        infile.close();                                                                                                \
-        if (file_exists && !overwrite) {                                                                               \
-            std::cout << "File " << export_filepath << " exists. Do you want to overwrite it? (y/n)" << std::endl;     \
-            char answer;                                                                                               \
-            std::cin >> answer;                                                                                        \
-            if ((answer != 'y' && answer != 'Y') || std::cin.fail()) {                                                 \
-                std::cout << "Abort." << std::endl;                                                                    \
-                return;                                                                                                \
-            }                                                                                                          \
-        }                                                                                                              \
-        std::cout << "Exporting to " << export_filepath << std::endl;                                                  \
-        export_stream.open(export_filepath, std::ios::out | std::ios::trunc);                                          \
-        out_stream = &export_stream;                                                                                   \
-    }                                                                                                                  \
-    std::ostream& os = *out_stream
-#define end_ostream(os)                                                                                                \
-    if (out_stream != &std::cout) {                                                                                    \
-        export_stream.close();                                                                                         \
-        std::cout << "Export finished." << std::endl;                                                                  \
-    }
+
 int main(int argc, char** argv) {
     CLI::App app{"MidiFun, a tool to parse midi file and print as other format"};
     // -v,--version
@@ -276,8 +302,10 @@ int main(int argc, char** argv) {
 
         subcommand->callback([&filepath, &verbose, &print_head, &print_track, &print_time, &print_text, &print_note,
                               &print_channel, &time_mode, &text_type_set, &print_bpm] {
-            init_ostream(os);
-
+            ExportStream os;
+            if (!os.is_confirmed()) {
+                return;
+            }
             if (verbose) {
                 print_head = true;
                 print_track = true;
@@ -436,7 +464,6 @@ int main(int argc, char** argv) {
                     }
                 }
             }
-            end_ostream(os);
         });
     }
     SUBCOMMAND(note) {
@@ -445,14 +472,13 @@ int main(int argc, char** argv) {
         std::string filepath;
         subcommand->add_option("filepath", filepath, "Input MIDI file path")->required()->check(CLI::ExistingFile);
 
-        bool verbose = false;
-        subcommand->add_flag("-v,--verbose", verbose, "Print verbose info")->default_val(false);
-
         MidiTimeMode time_mode;
         subcommand->add_option("--time-mode", time_mode, "Time mode")
             ->default_val(MidiTimeMode::microsecond)
             ->transform(CLI::Transformer(time_mode_map));
 
+        bool print_label = false;
+        subcommand->add_flag("--label", print_label, "Print label");
 
         std::vector<NoteVariable> contents;
 
@@ -461,14 +487,60 @@ int main(int argc, char** argv) {
             ->expected(1, -1)
             ->delimiter(',');
 
-        subcommand->callback([&filepath, &verbose, &time_mode, &contents] {
-            init_ostream(os);
-            if (verbose) {
+        subcommand->callback([&filepath, &time_mode, &contents, &print_label] {
+            ExportStream os;
+            if (!os.is_confirmed()) {
+                return;
+            }
+            if (contents.empty()) {
                 contents = {NoteVariable::time,  NoteVariable::track,    NoteVariable::channel,
                             NoteVariable::pitch, NoteVariable::velocity, NoteVariable::instrument,
                             NoteVariable::bar,   NoteVariable::beat};
             }
             MidiParser parser(filepath, time_mode);
+            if (print_label) {
+                for (NoteVariable content : contents) {
+                    switch (content) {
+                        case NoteVariable::time: {
+                            os << "time" << '\t';
+                            break;
+                        }
+                        case NoteVariable::track: {
+                            os << "track" << '\t';
+                            break;
+                        }
+                        case NoteVariable::channel: {
+                            os << "channel" << '\t';
+                            break;
+                        }
+                        case NoteVariable::pitch: {
+                            os << "pitch" << '\t';
+                            break;
+                        }
+                        case NoteVariable::velocity: {
+                            os << "velocity" << '\t';
+                            break;
+                        }
+                        case NoteVariable::instrument: {
+                            os << "instrument" << '\t';
+                            break;
+                        }
+                        case NoteVariable::bar: {
+                            os << "bar" << '\t';
+                            break;
+                        }
+                        case NoteVariable::beat: {
+                            os << "beat" << '\t';
+                            break;
+                        }
+                        default: {
+                            std::cerr << "Unknown content: " << (uint32_t)content << std::endl;
+                            break;
+                        }
+                    }
+                }
+                os << std::endl;
+            }
             parser.noteMap.for_event([&time_mode, &contents, &os](const Note& note) {
                 for (NoteVariable content : contents) {
                     switch (content) {
@@ -514,7 +586,6 @@ int main(int argc, char** argv) {
                     os << std::endl;
                 }
             });
-            end_ostream(os);
         });
     }
     SUBCOMMAND(notepair) {
@@ -523,14 +594,14 @@ int main(int argc, char** argv) {
         std::string filepath;
         subcommand->add_option("filepath", filepath, "Input MIDI file path")->required()->check(CLI::ExistingFile);
 
-        bool verbose = false;
-        subcommand->add_flag("-v,--verbose", verbose, "Print verbose info")->default_val(false);
-
         MidiTimeMode time_mode;
         subcommand->add_option("--time-mode", time_mode, "Time mode")
             ->default_val(MidiTimeMode::microsecond)
             ->transform(CLI::Transformer(time_mode_map));
 
+
+        bool print_label = false;
+        subcommand->add_flag("--label", print_label, "Print label");
 
         std::vector<NotePairVariable> contents;
 
@@ -539,16 +610,72 @@ int main(int argc, char** argv) {
             ->expected(1, -1)
             ->delimiter(',');
 
-        subcommand->callback([&filepath, &verbose, &time_mode, &contents] {
-            init_ostream(os);
-
-            if (verbose) {
+        subcommand->callback([&filepath, &time_mode, &contents, &print_label] {
+            ExportStream os;
+            if (!os.is_confirmed()) {
+                return;
+            }
+            if (contents.empty()) {
                 contents = {NotePairVariable::time,       NotePairVariable::duration, NotePairVariable::track,
                             NotePairVariable::channel,    NotePairVariable::pitch,    NotePairVariable::velocity,
-                            NotePairVariable::instrument, NotePairVariable::bar,      NotePairVariable::beat,
-                            NotePairVariable::bar_diff,   NotePairVariable::beat_diff};
+                            NotePairVariable::instrument, NotePairVariable::bar,      NotePairVariable::bar_diff,
+                            NotePairVariable::beat,       NotePairVariable::beat_diff};
             }
             MidiParser parser(filepath, time_mode);
+            if (print_label) {
+                for (NotePairVariable content : contents) {
+                    switch (content) {
+                        case NotePairVariable::time: {
+                            os << "time" << '\t';
+                            break;
+                        }
+                        case NotePairVariable::duration: {
+                            os << "duration" << '\t';
+                            break;
+                        }
+                        case NotePairVariable::track: {
+                            os << "track" << '\t';
+                            break;
+                        }
+                        case NotePairVariable::channel: {
+                            os << "channel" << '\t';
+                            break;
+                        }
+                        case NotePairVariable::pitch: {
+                            os << "pitch" << '\t';
+                            break;
+                        }
+                        case NotePairVariable::velocity: {
+                            os << "velocity" << '\t';
+                            break;
+                        }
+                        case NotePairVariable::instrument: {
+                            os << "instrument" << '\t';
+                            break;
+                        }
+                        case NotePairVariable::bar: {
+                            os << "bar" << '\t';
+                            break;
+                        }
+                        case NotePairVariable::bar_diff: {
+                            os << "bar_diff" << '\t';
+                            break;
+                        }
+                        case NotePairVariable::beat: {
+                            os << "beat" << '\t';
+                            break;
+                        }
+                        case NotePairVariable::beat_diff: {
+                            os << "beat_diff" << '\t';
+                            break;
+                        }
+                        default: {
+                            std::cerr << "Unknown content: " << (uint32_t)content << std::endl;
+                            break;
+                        }
+                    }
+                }
+            }
             link_notePair(parser.noteMap).for_event([&time_mode, &contents, &os](const NotePair& notePair) {
                 for (NotePairVariable content : contents) {
                     switch (content) {
@@ -606,7 +733,6 @@ int main(int argc, char** argv) {
                     os << std::endl;
                 }
             });
-            end_ostream(os);
         });
     }
     try {
