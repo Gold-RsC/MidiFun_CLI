@@ -118,7 +118,7 @@ std::ostream& operator<<(std::ostream& os, const progress_bar& bar) {
     b = (bar.certain_time_min_max.second - bar.certain_time_min_max.first) * progress_bar::len /
         (bar.song_time_min_max.second - bar.song_time_min_max.first);
     c = progress_bar::len - a - b;
-    os << '[' << str_fill(".", a) << str_fill("¡§€", b) << str_fill(".", c) << ']';
+    os << '[' << str_fill(".", a) << str_fill("¨€", b) << str_fill(".", c) << ']';
     return os;
 }
 template <typename iterator>
@@ -198,7 +198,8 @@ std::map<std::string, MidiPitchMode> pitch_mode_map = {
     {"name", MidiPitchMode::name},
     {"number", MidiPitchMode::number},
 };
-
+bool isCtrlSpacePressed = false;
+bool isShiftSpacePressed = false;
 int main(int argc, char** argv) {
     CLI::App app{"MidiPlay, a tool to play midi file easily"};
     // -v,--version
@@ -219,6 +220,62 @@ int main(int argc, char** argv) {
             MidiPlayer(NotePairList{NotePair(0, duration * 1e6, MidiTimeMode::microsecond, 0, channel, pitch, velocity,
                                              instrument)})
                 .start_normal();
+        });
+    }
+    SUBCOMMAND(midi) {
+        auto subcommand = app.add_subcommand("midi", "Play midi file");
+        std::string filepath;
+        subcommand->add_option("filepath", filepath, "Filepath")->required()->check(CLI::ExistingFile);
+        subcommand->add_option("--time-bar", progress_bar::len, "Length of time bar")->default_val(50);
+        subcommand->callback([&] {
+            uint64_t max_time = 0;
+            MidiParser parser(filepath, MidiTimeMode::microsecond);
+            parser.noteMap.for_list([&max_time](const NoteList& e) {
+                if (!e.empty()) {
+                    max_time = std::max(max_time, e.back().time);
+                }
+            });
+            MidiPlayer player(parser.noteMap);
+            player.start_normal();
+            std::cout << "Press ctrl + space to pause" << std::endl;
+            std::cout << "Press shift + space to stop" << std::endl;
+            uint64_t last_time = std::numeric_limits<uint64_t>::max();
+            while (!player.is_stopped()) {
+                uint64_t time = player.get_time();
+                if (time / 1000000 != last_time / 1000000) {
+                    std ::cout << "\r" << str_time(time, MidiTimeMode::microsecond) << " : "
+                               << progress_bar({0, time}, {0, max_time}) << " "
+                               << str_time(max_time, MidiTimeMode::microsecond) << std::flush;
+                    last_time = time;
+                }
+                if ((GetAsyncKeyState(VK_SPACE) & 0x8000) && (GetAsyncKeyState(VK_CONTROL) & 0x8000)) {
+                    if (!isCtrlSpacePressed) {
+                        if (player.is_playing()) {
+                            player.pause();
+                        }
+                        else if (player.is_paused()) {
+                            player.play();
+                        }
+                        isCtrlSpacePressed = true;
+                    }
+                }
+                else {
+                    isCtrlSpacePressed = false;
+                }
+
+                if ((GetAsyncKeyState(VK_SHIFT) & 0x8000) && (GetAsyncKeyState(VK_SPACE) & 0x8000)) {
+                    if (!isShiftSpacePressed) {
+                        player.stop();
+                        isShiftSpacePressed = true;
+                        break;
+                    }
+                }
+                else {
+                    isShiftSpacePressed = false;
+                }
+                Sleep(100);
+            }
+            std::cout << std::endl << "Finished" << std::flush;
         });
     }
     try {
