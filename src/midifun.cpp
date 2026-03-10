@@ -8,7 +8,7 @@ using namespace GoldType::MidiParse;
 #define SUBCOMMAND(...)
 
 std::string export_filepath;
-bool overwrite = false;
+bool is_allow_overwrite = false;
 class ExportStream {
 private:
     std::ostream* out_stream;
@@ -24,7 +24,7 @@ public:
             std::ifstream infile(export_filepath);
             file_exists = infile.good();
             infile.close();
-            if (file_exists && !overwrite) {
+            if (file_exists && !is_allow_overwrite) {
                 std::cout << "File " << export_filepath << " exists. Do you want to overwrite it? (y/n)" << std::endl;
                 char answer;
                 std::cin >> answer;
@@ -34,11 +34,11 @@ public:
                     return;
                 }
             }
-            confirm = true;
             std::cout << "Exporting to " << export_filepath << std::endl;
             export_stream.open(export_filepath, std::ios::out | std::ios::trunc);
             out_stream = &export_stream;
         }
+        confirm = true;
     }
     ~ExportStream(void) {
         if (out_stream != &std::cout) {
@@ -247,7 +247,7 @@ int main(int argc, char** argv) {
     app.set_version_flag("-v,--version", VERSION);
 
     app.add_option("--export", export_filepath, "Export filepath");
-    app.add_flag("--export-overwrite", overwrite, "Overwrite existing file")->default_val(false);
+    app.add_flag("--export-overwrite", is_allow_overwrite, "Overwrite existing file")->default_val(false);
 
     // Add this after having fixed bugs
     // enum class ExportFormat : uint8_t {
