@@ -676,8 +676,17 @@ int main(int argc, char** argv) {
         subcommand->callback([subcommand] {
             const auto& args = subcommand->remaining();
             std::string cmd = "midiplay-win.exe";
-            for (const auto& arg : args) {
-                cmd += " " + arg;
+
+            if (!args.empty()) {
+                if (args.front() == "--note" || args.front() == "--midi") {
+                    cmd += " " + args.front().substr(2);
+                }
+                else {
+                    cmd += " " + args.front();
+                }
+                for (auto it = args.begin() + 1; it != args.end(); it++) {
+                    cmd += " " + *it;
+                }
             }
             system(cmd.c_str());
         });

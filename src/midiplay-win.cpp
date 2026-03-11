@@ -227,6 +227,12 @@ int main(int argc, char** argv) {
         std::string filepath;
         subcommand->add_option("filepath", filepath, "Filepath")->required()->check(CLI::ExistingFile);
         subcommand->add_option("--time-bar", progress_bar::len, "Length of time bar")->default_val(50);
+        bool print_time = true;
+        subcommand->add_option("--time", print_time, "Print time")->default_val(true);
+        double speed = 1.0;
+        subcommand->add_option("--speed", speed, "Speed")->default_val(1.0);
+        bool loop = false;
+        subcommand->add_flag("--loop", loop, "Loop")->default_val(false);
         subcommand->callback([&] {
             uint64_t max_time = 0;
             MidiParser parser(filepath, MidiTimeMode::microsecond);
@@ -236,17 +242,25 @@ int main(int argc, char** argv) {
                 }
             });
             MidiPlayer player(parser.noteMap);
-            player.start_normal();
+            player.set_speed(speed);
+            if (loop) {
+                player.start_loop();
+            }
+            else {
+                player.start_normal();
+            }
             std::cout << "Press ctrl + space to pause" << std::endl;
             std::cout << "Press shift + space to stop" << std::endl;
             uint64_t last_time = std::numeric_limits<uint64_t>::max();
             while (!player.is_stopped()) {
-                uint64_t time = player.get_time();
-                if (time / 1000000 != last_time / 1000000) {
-                    std ::cout << "\r" << str_time(time, MidiTimeMode::microsecond) << " : "
-                               << progress_bar({0, time}, {0, max_time}) << " "
-                               << str_time(max_time, MidiTimeMode::microsecond) << std::flush;
-                    last_time = time;
+                if (print_time) {
+                    uint64_t time = player.get_time();
+                    if (time / 1000000 != last_time / 1000000) {
+                        std ::cout << "\r" << str_time(time, MidiTimeMode::microsecond) << " : "
+                                   << progress_bar({0, time}, {0, max_time}) << " "
+                                   << str_time(max_time, MidiTimeMode::microsecond) << std::flush;
+                        last_time = time;
+                    }
                 }
                 if ((GetAsyncKeyState(VK_SPACE) & 0x8000) && (GetAsyncKeyState(VK_CONTROL) & 0x8000)) {
                     if (!isCtrlSpacePressed) {
