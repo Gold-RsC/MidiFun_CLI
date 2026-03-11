@@ -682,10 +682,10 @@ int main(int argc, char** argv) {
                     cmd += " " + args.front().substr(2);
                 }
                 else {
-                    cmd += " " + args.front();
+                    cmd += " \"" + args.front() + "\"";
                 }
                 for (auto it = args.begin() + 1; it != args.end(); it++) {
-                    cmd += " " + *it;
+                    cmd += " \"" + *it + "\"";
                 }
             }
             system(cmd.c_str());

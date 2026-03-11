@@ -235,13 +235,10 @@ int main(int argc, char** argv) {
         subcommand->add_flag("--loop", loop, "Loop")->default_val(false);
         subcommand->callback([&] {
             uint64_t max_time = 0;
-            MidiParser parser(filepath, MidiTimeMode::microsecond);
-            parser.noteMap.for_list([&max_time](const NoteList& e) {
-                if (!e.empty()) {
-                    max_time = std::max(max_time, e.back().time);
-                }
-            });
-            MidiPlayer player(parser.noteMap);
+            MidiPlayer player(filepath);
+            if (!player.messageList.empty()) {
+                max_time = std::max(max_time, player.messageList.back().time);
+            }
             player.set_speed(speed);
             if (loop) {
                 player.start_loop();
