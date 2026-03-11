@@ -99,7 +99,7 @@ int main(int argc, char** argv) {
         subcommand->add_option("filepath", filepath, "Filepath")->required()->check(CLI::ExistingFile);
 
         bool print_time = true;
-        subcommand->add_option("--time-show", print_time, "Show time")->default_val(true);
+        subcommand->add_flag("--time-show", print_time, "Show time")->default_val(true);
         subcommand->add_option("--time-bar", progress_bar::len, "Length of time bar")->default_val(50);
         uint64_t time_begin = 0;
         subcommand->add_option("--time-begin", time_begin, "Time begin (microsecond / us)")->default_val(0);
@@ -107,16 +107,34 @@ int main(int argc, char** argv) {
         subcommand->add_option("--time-end", time_end, "Time end (microsecond / us)")
             ->default_val(std::numeric_limits<uint64_t>::max());
 
+        bool print_lyrics = false;
+        subcommand->add_flag("--lyrics-show", print_lyrics, "Show lyrics")->default_val(false);
+        uint32_t print_lyrics_num = 1;
+        subcommand->add_option("--lyrics-num", print_lyrics_num, "Number of lyrics to show")->default_val(1);
+        bool lyrics_emphasis = false;
+        subcommand->add_flag("--lyrics-emphasis", lyrics_emphasis, "Emphasis lyrics")->default_val(false);
+        bool lyrics_full = false;
+        subcommand->add_flag("--lyrics-full", lyrics_full, "Show full lyrics")->default_val(false);
+
         double speed = 1.0;
         subcommand->add_option("--speed", speed, "Speed")->default_val(1.0);
+
         bool loop = false;
         subcommand->add_flag("--loop", loop, "Loop")->default_val(false);
+
         subcommand->callback([&] {
             if (time_begin > time_end) {
                 throw CLI::ValidationError("--time-end", "Time end must be greater than time begin");
             }
             uint64_t max_time = 0;
-            MidiPlayer player(filepath);
+            MidiFile file(filepath);
+            file.read();
+            MidiParser parser(file, MidiTimeMode::microsecond);
+            TextList lyrics =
+                parser.textMap.filter_event_if([](const Text& e) { return e.type == MidiMetaType::lyric; })
+                    .merge_event();
+            lyrics.sort();
+            MidiPlayer player(file);
             if (!player.messageList.empty()) {
                 max_time = std::max(max_time, player.messageList.back().time);
             }
@@ -133,6 +151,11 @@ int main(int argc, char** argv) {
             std::cout << "Press ctrl + space to pause or continue" << std::endl;
             std::cout << "Press shift + space to stop" << std::endl;
             uint64_t last_time = std::numeric_limits<uint64_t>::max();
+            TextList::iterator lyrics_it = lyrics.begin();
+            if (print_time || print_lyrics) {
+                std::cout << "\033[s";
+                std::cout << "\033[?25l";
+            }
             while (!player.is_stopped()) {
                 if (time_end != std::numeric_limits<uint64_t>::max() && player.get_time() > time_end) {
                     if (loop) {
@@ -142,15 +165,61 @@ int main(int argc, char** argv) {
                         player.stop();
                     }
                 }
+                if (print_time || print_lyrics) {
+                    std::cout << "\033[u";
+                }
+                uint64_t time = player.get_time();
                 if (print_time) {
-                    uint64_t time = player.get_time();
                     if (time / 1000000 != last_time / 1000000) {
-                        std ::cout << "\r" << str_time(time, MidiTimeMode::microsecond) << " : "
-                                   << progress_bar({0, time}, {0, max_time}) << " "
-                                   << str_time(max_time, MidiTimeMode::microsecond) << std::flush;
+                        std::cout << "\033[2K\r" << str_time(time, MidiTimeMode::microsecond) << " : "
+                                  << progress_bar({0, time}, {0, max_time}) << " "
+                                  << str_time(max_time, MidiTimeMode::microsecond);
                         last_time = time;
                     }
+                    std::cout << "\033[1B\r";
                 }
+                if (print_lyrics) {
+                    if (lyrics_it != lyrics.end() && (lyrics_it + 1) != lyrics.end() && time >= (lyrics_it + 1)->time) {
+                        std::cout << "\033[2K\r";
+                    }
+                    if (lyrics_full) {
+                        if (lyrics_it != lyrics.end() && (lyrics_it + 1) != lyrics.end() &&
+                            time >= (lyrics_it + 1)->time) {
+                            ++lyrics_it;
+                            for (auto it = lyrics.begin(); it != lyrics.end(); ++it) {
+                                if (lyrics_emphasis && it == lyrics_it) {
+                                    std::cout << "\033[7m";
+                                }
+                                std::cout << it->text;
+                                if (lyrics_emphasis && it == lyrics_it) {
+                                    std::cout << "\033[0m";
+                                }
+                                std::cout << ' ';
+                            }
+                        }
+                    }
+                    else {
+                        while (lyrics_it != lyrics.end() && (lyrics_it + 1) != lyrics.end() &&
+                               time >= (lyrics_it + 1)->time) {
+                            if (lyrics_emphasis) {
+                                std::cout << "\033[7m";
+                            }
+                            std::cout << lyrics_it->text;
+                            if (lyrics_emphasis) {
+                                std::cout << "\033[0m";
+                            }
+                            for (uint32_t i = 1; (lyrics_it + i) != lyrics.end() && i < print_lyrics_num; ++i) {
+                                std::cout << ' ' << (lyrics_it + i)->text;
+                            }
+                            ++lyrics_it;
+                        }
+                    }
+                    std::cout << "\033[1B\r";
+                }
+                if (print_time || print_lyrics) {
+                    std::cout << std::flush;
+                }
+
                 if ((GetAsyncKeyState(VK_SPACE) & 0x8000) && (GetAsyncKeyState(VK_CONTROL) & 0x8000)) {
                     if (!isCtrlSpacePressed) {
                         if (player.is_playing()) {
@@ -177,6 +246,9 @@ int main(int argc, char** argv) {
                     isShiftSpacePressed = false;
                 }
                 Sleep(100);
+            }
+            if (print_time || print_lyrics) {
+                std::cout << "\033[?25h";
             }
             std::cout << std::endl << "Finished" << std::flush;
         });
