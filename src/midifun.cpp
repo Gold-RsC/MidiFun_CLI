@@ -508,6 +508,7 @@ int main(int argc, char** argv) {
                             }
                         }
                     }
+                    std::cout << std::endl;
                 }
                 link_notePair(parser.noteMap).for_event([&](const NotePair& notePair) {
                     if (!track_nums.empty() && track_nums.find(notePair.track) == track_nums.end()) {

@@ -16,6 +16,13 @@ It's provides various subcommands to extract information, and perform MIDI in si
 
 - Filter events in some way
 
+## Examples
+
+<html>
+<img src="./img/info.png"/>
+<img src="./img/play.png"/>
+</html>
+
 ## Dependencies
 
 - [CLI11](https://github.com/CLIUtils/CLI11) - A modern, C++11/14/17 command line parser
