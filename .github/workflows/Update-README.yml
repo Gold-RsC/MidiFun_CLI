@@ -1,29 +1,32 @@
 name: Update README
 
 on:
+  push:
+    branches:
+      - main
     workflow_dispatch:
 
 jobs:
-    update-readme:
-        runs-on: windows-latest
+  update-readme:
+    runs-on: windows-latest
 
-        steps:
-            - name: Checkout repository
-              uses: actions/checkout@v3
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
 
-            - name: Set up Python
-              uses: actions/setup-python@v5
-              with:
-                  python-version: "3.x"
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
 
-            - name: run python script
-              env:
-                  MIDIFUN_CMD: "./bin/midifun.exe"
-                  MIDIPLAY_WIN_CMD: "./bin/midiplay-win.exe"
-              run: python .github/scripts/update-readme.py
+      - name: run python script
+        env:
+          MIDIFUN_CMD: "./bin/midifun.exe"
+          MIDIPLAY_WIN_CMD: "./bin/midiplay-win.exe"
+        run: python .github/scripts/update-readme.py
 
-            - name: commit change
-              uses: stefanzweimann/git-auto-commit-action@v5
-              with:
-                  commit-message: "? docs: auto-update CLI help in README [skip ci]"
-                  file_pattern: README.md
+      - name: commit change
+        uses: stefanzweimann/git-auto-commit-action@v5
+        with:
+          commit-message: "? docs: auto-update CLI help in README [skip ci]"
+          file_pattern: README.md
