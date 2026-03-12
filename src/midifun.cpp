@@ -109,8 +109,7 @@ int main(int argc, char** argv) {
                 ->expected(1, text_type_map.size())
                 ->delimiter(',');
 
-            subcommand->callback([&filepath, &verbose, &print_head, &print_track, &print_time, &print_text, &print_note,
-                                  &print_channel, &time_mode, &text_type_set, &print_bpm] {
+            subcommand->callback([&] {
                 if (verbose) {
                     print_head = true;
                     print_track = true;
@@ -304,7 +303,7 @@ int main(int argc, char** argv) {
                 ->expected(1, -1)
                 ->delimiter(',');
 
-            subcommand->callback([&filepath, &time_mode, &contents, &print_label] {
+            subcommand->callback([&] {
                 if (contents.empty()) {
                     contents = {NoteVariable::time,  NoteVariable::track,    NoteVariable::channel,
                                 NoteVariable::pitch, NoteVariable::velocity, NoteVariable::instrument,
@@ -354,7 +353,7 @@ int main(int argc, char** argv) {
                     }
                     std::cout << std::endl;
                 }
-                parser.noteMap.for_event([&time_mode, &contents](const Note& note) {
+                parser.noteMap.for_event([&](const Note& note) {
                     for (NoteVariable content : contents) {
                         switch (content) {
                             case NoteVariable::time: {
@@ -427,7 +426,7 @@ int main(int argc, char** argv) {
                 ->expected(1, -1)
                 ->delimiter(',');
 
-            subcommand->callback([&filepath, &time_mode, &contents, &print_label] {
+            subcommand->callback([&] {
                 if (contents.empty()) {
                     contents = {NotePairVariable::time,       NotePairVariable::duration, NotePairVariable::track,
                                 NotePairVariable::channel,    NotePairVariable::pitch,    NotePairVariable::velocity,
@@ -489,7 +488,7 @@ int main(int argc, char** argv) {
                         }
                     }
                 }
-                link_notePair(parser.noteMap).for_event([&time_mode, &contents](const NotePair& notePair) {
+                link_notePair(parser.noteMap).for_event([&](const NotePair& notePair) {
                     for (NotePairVariable content : contents) {
                         switch (content) {
                             case NotePairVariable::time: {
