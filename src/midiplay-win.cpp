@@ -113,8 +113,6 @@ int main(int argc, char** argv) {
         subcommand->add_option("--lyrics-num", print_lyrics_num, "Number of lyrics to show")->default_val(1);
         bool lyrics_emphasis = false;
         subcommand->add_flag("--lyrics-emphasis", lyrics_emphasis, "Emphasis lyrics")->default_val(false);
-        bool lyrics_full = false;
-        subcommand->add_flag("--lyrics-full", lyrics_full, "Show full lyrics")->default_val(false);
 
         double speed = 1.0;
         subcommand->add_option("--speed", speed, "Speed")->default_val(1.0);
@@ -179,40 +177,21 @@ int main(int argc, char** argv) {
                     std::cout << "\033[1B\r";
                 }
                 if (print_lyrics) {
-                    if (lyrics_it != lyrics.end() && (lyrics_it + 1) != lyrics.end() && time >= (lyrics_it + 1)->time) {
+                    if (lyrics_it != lyrics.end() && time >= lyrics_it->time) {
                         std::cout << "\033[2K\r";
                     }
-                    if (lyrics_full) {
-                        if (lyrics_it != lyrics.end() && (lyrics_it + 1) != lyrics.end() &&
-                            time >= (lyrics_it + 1)->time) {
-                            ++lyrics_it;
-                            for (auto it = lyrics.begin(); it != lyrics.end(); ++it) {
-                                if (lyrics_emphasis && it == lyrics_it) {
-                                    std::cout << "\033[7m";
-                                }
-                                std::cout << it->text;
-                                if (lyrics_emphasis && it == lyrics_it) {
-                                    std::cout << "\033[0m";
-                                }
-                                std::cout << ' ';
-                            }
+                    while (lyrics_it != lyrics.end() && time >= lyrics_it->time) {
+                        if (lyrics_emphasis) {
+                            std::cout << "\033[7m";
                         }
-                    }
-                    else {
-                        while (lyrics_it != lyrics.end() && (lyrics_it + 1) != lyrics.end() &&
-                               time >= (lyrics_it + 1)->time) {
-                            if (lyrics_emphasis) {
-                                std::cout << "\033[7m";
-                            }
-                            std::cout << lyrics_it->text;
-                            if (lyrics_emphasis) {
-                                std::cout << "\033[0m";
-                            }
-                            for (uint32_t i = 1; (lyrics_it + i) != lyrics.end() && i < print_lyrics_num; ++i) {
-                                std::cout << ' ' << (lyrics_it + i)->text;
-                            }
-                            ++lyrics_it;
+                        std::cout << lyrics_it->text;
+                        if (lyrics_emphasis) {
+                            std::cout << "\033[0m";
                         }
+                        for (uint32_t i = 1; (lyrics_it + i) != lyrics.end() && i < print_lyrics_num; ++i) {
+                            std::cout << ' ' << (lyrics_it + i)->text;
+                        }
+                        ++lyrics_it;
                     }
                     std::cout << "\033[1B\r";
                 }
