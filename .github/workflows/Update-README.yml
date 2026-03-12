@@ -29,5 +29,5 @@ jobs:
       - name: commit change
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
-          commit-message: ":memo: docs: auto-update CLI help in README [skip ci]"
+          commit_message: ":memo: docs: auto-update CLI help in README [skip ci]"
           file_pattern: README.md
