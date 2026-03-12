@@ -1,0 +1,40 @@
+# MidiFun
+
+MidiFun is a command-line tool for parsing and processing MIDI files, written in C++.
+
+It's provides various subcommands to extract information, and perform MIDI in simple operations.
+
+## Features
+
+- Display MIDI file information
+
+- Extract note (or notepair) data with customizable output fields
+
+- Play MIDI files (Windows Only)
+
+- Support for different time modes: tick(midi tick), microsecond(which means us)
+
+- Filter events in some way
+
+## Dependencies
+
+- [CLI11](https://github.com/CLIUtils/CLI11) - A modern, C++11/14/17 command line parser
+
+- [MidiParse-v7](https://github.com/Gold-RsC/MidiParse-v7) - A MIDI file parser library written by me
+
+## Usage
+
+Download the `.exe` files from the repository.
+
+And then run the executable file with the following command:
+
+```
+./MidiFun.exe [subcommand] [options]
+```
+
+<!-- AUTO_HELP_START -->
+<!-- AUTO_HELP_END -->
+
+## License
+
+MIT License

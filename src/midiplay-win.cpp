@@ -79,19 +79,19 @@ int main(int argc, char** argv) {
     struct note_subcommand_t {
         uint32_t pitch = 0;
         uint32_t velocity = 0;
-        double duration = 0;
+        uint64_t duration = 0;
         uint32_t channel = 0;
         uint32_t instrument = 0;
         void setup(CLI::App& app) {
             auto subcommand = app.add_subcommand("note", "Play note");
             subcommand->add_option("pitch", pitch, "Pitch")->required()->check(CLI::Range(0, 127));
             subcommand->add_option("--velocity", velocity, "Velocity")->default_val(127)->check(CLI::Range(0, 127));
-            subcommand->add_option("--duration", duration, "Duration")->default_val(1.0);
+            subcommand->add_option("--duration", duration, "Duration (microsecond / us)")->default_val(1000000llu);
             subcommand->add_option("--channel", channel, "Channel")->default_val(0);
             subcommand->add_option("--instrument", instrument, "Instrument")->default_val(0);
             subcommand->callback([&] {
-                MidiPlayer(NotePairList{NotePair(0, duration * 1e6, MidiTimeMode::microsecond, 0, channel, pitch,
-                                                 velocity, instrument)})
+                MidiPlayer(NotePairList{NotePair(0, duration, MidiTimeMode::microsecond, 0, channel, pitch, velocity,
+                                                 instrument)})
                     .start_normal();
             });
         }
