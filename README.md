@@ -21,6 +21,7 @@ It's provides various subcommands to extract information, and perform MIDI in si
 <html>
 <img src="./img/info.png"/>
 <img src="./img/play.png"/>
+<img src="./img/get.png"/>
 </html>
 
 ## Dependencies
@@ -173,6 +174,25 @@ SUBCOMMANDS:
 ```
 
 <!-- AUTO_HELP_END -->
+
+### Shell Redirection Operators
+
+***Don't forget to use Shell Redirection Operators to redirect the output to a file!!!***
+
+| Operator | Meaning | Explanation |
+| :--- | :--- | :--- |
+| **`>`** | **Redirect stdout** | Takes the standard output (usually the screen) of a command and writes it to a file. If the file already exists, it **overwrites** the file. |
+| **`>>`** | **Append stdout** | Takes the standard output of a command and appends it to the end of a file. If the file does not exist, it is created. |
+| **`2>`** | **Redirect stderr** | Takes the standard error output (error messages) of a command and writes it to a file. It **overwrites** the target file. |
+| **`2>>`** | **Append stderr** | Takes the standard error output of a command and appends it to the end of a file. |
+| **`&>`** | **Redirect both stdout and stderr** (Bash/Zsh) | Redirects both standard output and standard error to the same file, **overwriting** the file. (This is a Bash/Zsh shorthand). |
+| **`&>>`** | **Append both stdout and stderr** (Bash/Zsh) | Appends both standard output and standard error to the same file. (Bash/Zsh shorthand). |
+| **`2>&1`** | **Redirect stderr to stdout** | This does not send output to a file directly. Instead, it sends the standard error stream to wherever the standard output stream is currently going. It is often used to combine streams (e.g., `command > file.txt 2>&1`). |
+| **`1>&2`** | **Redirect stdout to stderr** | Sends the standard output to the standard error stream. This is useful for writing script messages that should be treated as errors. |
+| **`<`** | **Redirect stdin** | Takes the contents of a file and uses it as the standard input for a command. |
+| **`<<`** | **Here Document** | Allows you to provide multiple lines of input directly in the shell script or command line until a specified delimiter is reached. |
+| **`<<<`** | **Here String** | A variant of a here document. It takes a single string and passes it to the command as standard input. |
+| **`<>`** | **Open file for reading and writing** | Opens a file for both reading and writing via the file descriptor. This is less common and typically used in advanced scripting. |
 
 ## License
 
