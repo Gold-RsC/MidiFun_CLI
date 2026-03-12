@@ -362,10 +362,10 @@ int main(int argc, char** argv) {
                 }
                 parser.noteMap.for_event([&](const Note& note) {
                     if (!track_nums.empty() && track_nums.find(note.track) == track_nums.end()) {
-                        continue;
+                        return;
                     }
                     if (!channel_nums.empty() && channel_nums.find(note.channel) == channel_nums.end()) {
-                        continue;
+                        return;
                     }
                     for (NoteVariable content : contents) {
                         switch (content) {
@@ -511,10 +511,10 @@ int main(int argc, char** argv) {
                 }
                 link_notePair(parser.noteMap).for_event([&](const NotePair& notePair) {
                     if (!track_nums.empty() && track_nums.find(notePair.track) == track_nums.end()) {
-                        continue;
+                        return;
                     }
                     if (!channel_nums.empty() && channel_nums.find(notePair.channel) == channel_nums.end()) {
-                        continue;
+                        return;
                     }
                     for (NotePairVariable content : contents) {
                         switch (content) {
