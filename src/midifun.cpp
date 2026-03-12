@@ -4,7 +4,7 @@
 using namespace GoldType::MidiParse;
 #include "private/format_stream.hpp"
 
-#define VERSION "1.11.0"
+#define VERSION "1.1.21"
 
 std::map<std::string, MidiTimeMode> time_mode_map = {{"tick", MidiTimeMode::tick},
                                                      {"microsecond", MidiTimeMode::microsecond}};
@@ -286,6 +286,8 @@ int main(int argc, char** argv) {
         MidiTimeMode time_mode;
         bool print_label = false;
         std::vector<NoteVariable> contents;
+        std::unordered_set<uint32_t> track_nums;
+        std::unordered_set<uint32_t> channel_nums;
         void setup(CLI::App& app) {
             auto subcommand = app.add_subcommand("get-note", "Get MIDI notes");
 
@@ -297,6 +299,11 @@ int main(int argc, char** argv) {
 
             subcommand->add_flag("--label", print_label, "Print label");
 
+            subcommand->add_option("--filter-track", track_nums, "Track numbers")->expected(0, 127)->delimiter(',');
+
+            subcommand->add_option("--filter-channel", channel_nums, "Channel numbers")
+                ->expected(0, 15)
+                ->delimiter(',');
 
             subcommand->add_option("--content", contents, "Content to print")
                 ->transform(CLI::Transformer(note_content_map))
@@ -354,6 +361,12 @@ int main(int argc, char** argv) {
                     std::cout << std::endl;
                 }
                 parser.noteMap.for_event([&](const Note& note) {
+                    if (!track_nums.empty() && track_nums.find(note.track) == track_nums.end()) {
+                        continue;
+                    }
+                    if (!channel_nums.empty() && channel_nums.find(note.channel) == channel_nums.end()) {
+                        continue;
+                    }
                     for (NoteVariable content : contents) {
                         switch (content) {
                             case NoteVariable::time: {
@@ -408,6 +421,8 @@ int main(int argc, char** argv) {
         MidiTimeMode time_mode;
         bool print_label = false;
         std::vector<NotePairVariable> contents;
+        std::unordered_set<uint32_t> track_nums;
+        std::unordered_set<uint32_t> channel_nums;
         void setup(CLI::App& app) {
             auto subcommand = app.add_subcommand("get-notepair", "Get MIDI note pairs");
 
@@ -419,6 +434,12 @@ int main(int argc, char** argv) {
 
 
             subcommand->add_flag("--label", print_label, "Print label");
+
+            subcommand->add_option("--filter-track", track_nums, "Track numbers")->expected(0, 127)->delimiter(',');
+
+            subcommand->add_option("--filter-channel", channel_nums, "Channel numbers")
+                ->expected(0, 15)
+                ->delimiter(',');
 
 
             subcommand->add_option("--content", contents, "Content to print")
@@ -489,6 +510,12 @@ int main(int argc, char** argv) {
                     }
                 }
                 link_notePair(parser.noteMap).for_event([&](const NotePair& notePair) {
+                    if (!track_nums.empty() && track_nums.find(notePair.track) == track_nums.end()) {
+                        continue;
+                    }
+                    if (!channel_nums.empty() && channel_nums.find(notePair.channel) == channel_nums.end()) {
+                        continue;
+                    }
                     for (NotePairVariable content : contents) {
                         switch (content) {
                             case NotePairVariable::time: {

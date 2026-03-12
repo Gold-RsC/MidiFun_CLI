@@ -7,7 +7,7 @@ using namespace GoldType::MidiParse;
 
 #include "private/format_stream.hpp"
 
-#define VERSION "win-1.4.0"
+#define VERSION "win-1.1.21"
 
 #define SUBCOMMAND(...)
 
