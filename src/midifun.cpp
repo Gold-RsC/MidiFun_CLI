@@ -435,10 +435,14 @@ int main(int argc, char** argv) {
 
             subcommand->add_flag("--label", print_label, "Print label");
 
-            subcommand->add_option("--filter-track", track_nums, "Track numbers")->expected(0, 127)->delimiter(',');
+            subcommand->add_option("--filter-track", track_nums, "Track numbers")
+                ->check(CLI::Range(0, 127))
+                ->expected(1, 128)
+                ->delimiter(',');
 
             subcommand->add_option("--filter-channel", channel_nums, "Channel numbers")
-                ->expected(0, 15)
+                ->check(CLI::Range(0, 15))
+                ->expected(1, 16)
                 ->delimiter(',');
 
 
@@ -604,6 +608,7 @@ int main(int argc, char** argv) {
     };
     play_subcommand_t play_subcommand;
     play_subcommand.setup(app);
+
     try {
         app.parse(argc, argv);
     }
