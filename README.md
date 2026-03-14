@@ -148,8 +148,9 @@ OPTIONS:
           --time-mode ENUM:{microsecond->1,tick->0} [1]  
                               Time mode
           --label             Print label
-          --filter-track UINT Track numbers
-          --filter-channel UINT 
+          --filter-track UINT:INT in [0 - 127] 
+                              Track numbers
+          --filter-channel UINT:INT in [0 - 15] 
                               Channel numbers
           --content ENUM:{bar->6,beat->7,channel->2,instrument->5,pitch->3,time->0,track->1,velocity->4} ... 
                               Content to print
