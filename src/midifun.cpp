@@ -21,14 +21,14 @@ std::map<std::string, MidiMetaType> text_type_map = {
 };
 
 enum class NoteVariable : uint8_t {
-    time = 0,
-    track = 1,
-    channel = 2,
-    pitch = 3,
-    velocity = 4,
+    time       = 0,
+    track      = 1,
+    channel    = 2,
+    pitch      = 3,
+    velocity   = 4,
     instrument = 5,
-    bar = 6,
-    beat = 7
+    bar        = 6,
+    beat       = 7
 };
 std::map<std::string, NoteVariable> note_content_map{
     {"time", NoteVariable::time},   {"track", NoteVariable::track},       {"channel", NoteVariable::channel},
@@ -36,17 +36,17 @@ std::map<std::string, NoteVariable> note_content_map{
     {"bar", NoteVariable::bar},     {"beat", NoteVariable::beat},
 };
 enum class NotePairVariable : uint8_t {
-    time = 0,
-    track = 1,
-    channel = 2,
-    pitch = 3,
-    velocity = 4,
+    time       = 0,
+    track      = 1,
+    channel    = 2,
+    pitch      = 3,
+    velocity   = 4,
     instrument = 5,
-    bar = 6,
-    beat = 7,
-    duration = 8,
-    bar_diff = 9,
-    beat_diff = 10
+    bar        = 6,
+    beat       = 7,
+    duration   = 8,
+    bar_diff   = 9,
+    beat_diff  = 10
 };
 std::map<std::string, NotePairVariable> notepair_content_map{
     {"time", NotePairVariable::time},         {"track", NotePairVariable::track},
@@ -76,13 +76,13 @@ int main(int argc, char** argv) {
 
     struct info_subcommand_t {
         std::string filepath;
-        bool verbose = false;
-        bool print_head = false;
-        bool print_track = false;
-        bool print_time = false;
-        bool print_text = false;
-        bool print_note = false;
-        bool print_bpm = false;
+        bool verbose       = false;
+        bool print_head    = false;
+        bool print_track   = false;
+        bool print_time    = false;
+        bool print_text    = false;
+        bool print_note    = false;
+        bool print_bpm     = false;
         bool print_channel = false;
         MidiTimeMode time_mode;
         std::unordered_set<MidiMetaType> text_type_set;
@@ -111,13 +111,13 @@ int main(int argc, char** argv) {
 
             subcommand->callback([&] {
                 if (verbose) {
-                    print_head = true;
-                    print_track = true;
-                    print_time = true;
-                    print_text = true;
-                    print_note = true;
+                    print_head    = true;
+                    print_track   = true;
+                    print_time    = true;
+                    print_text    = true;
+                    print_note    = true;
                     print_channel = true;
-                    print_bpm = true;
+                    print_bpm     = true;
                 }
                 MidiFile file(filepath);
                 file.read();
@@ -153,7 +153,7 @@ int main(int argc, char** argv) {
                 });
                 for (const auto& p : track_time_min_max) {
                     if (p.first <= p.second) {
-                        song_time_min_max.first = std::min(song_time_min_max.first, p.first);
+                        song_time_min_max.first  = std::min(song_time_min_max.first, p.first);
                         song_time_min_max.second = std::max(song_time_min_max.second, p.second);
                     }
                 }
@@ -589,7 +589,7 @@ int main(int argc, char** argv) {
 
             subcommand->callback([subcommand] {
                 const auto& args = subcommand->remaining();
-                std::string cmd = "midiplay-win.exe";
+                std::string cmd  = "midiplay-win.exe";
 
                 if (!args.empty()) {
                     if (args.front() == "--note" || args.front() == "--midi") {

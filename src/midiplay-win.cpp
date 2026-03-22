@@ -27,14 +27,14 @@ std::map<std::string, MidiMetaType> text_type_map = {
 };
 
 enum class NoteVariable : uint8_t {
-    time = 0,
-    track = 1,
-    channel = 2,
-    pitch = 3,
-    velocity = 4,
+    time       = 0,
+    track      = 1,
+    channel    = 2,
+    pitch      = 3,
+    velocity   = 4,
     instrument = 5,
-    bar = 6,
-    beat = 7
+    bar        = 6,
+    beat       = 7
 };
 std::map<std::string, NoteVariable> note_content_map{
     {"time", NoteVariable::time},   {"track", NoteVariable::track},       {"channel", NoteVariable::channel},
@@ -42,17 +42,17 @@ std::map<std::string, NoteVariable> note_content_map{
     {"bar", NoteVariable::bar},     {"beat", NoteVariable::beat},
 };
 enum class NotePairVariable : uint8_t {
-    time = 0,
-    track = 1,
-    channel = 2,
-    pitch = 3,
-    velocity = 4,
+    time       = 0,
+    track      = 1,
+    channel    = 2,
+    pitch      = 3,
+    velocity   = 4,
     instrument = 5,
-    bar = 6,
-    beat = 7,
-    duration = 8,
-    bar_diff = 9,
-    beat_diff = 10
+    bar        = 6,
+    beat       = 7,
+    duration   = 8,
+    bar_diff   = 9,
+    beat_diff  = 10
 };
 std::map<std::string, NotePairVariable> notepair_content_map{
     {"time", NotePairVariable::time},         {"track", NotePairVariable::track},
@@ -62,14 +62,14 @@ std::map<std::string, NotePairVariable> notepair_content_map{
 };
 
 enum class MidiPitchMode : uint8_t {
-    name = 0,
+    name   = 0,
     number = 1,
 };
 std::map<std::string, MidiPitchMode> pitch_mode_map = {
     {"name", MidiPitchMode::name},
     {"number", MidiPitchMode::number},
 };
-bool isCtrlSpacePressed = false;
+bool isCtrlSpacePressed  = false;
 bool isShiftSpacePressed = false;
 int main(int argc, char** argv) {
     CLI::App app{"MidiPlay, a tool to play midi file easily"};
@@ -77,10 +77,10 @@ int main(int argc, char** argv) {
     app.set_version_flag("-v,--version", VERSION);
 
     struct note_subcommand_t {
-        uint32_t pitch = 0;
-        uint32_t velocity = 0;
-        uint64_t duration = 0;
-        uint32_t channel = 0;
+        uint32_t pitch      = 0;
+        uint32_t velocity   = 0;
+        uint64_t duration   = 0;
+        uint32_t channel    = 0;
         uint32_t instrument = 0;
         void setup(CLI::App& app) {
             auto subcommand = app.add_subcommand("note", "Play note");
@@ -101,14 +101,14 @@ int main(int argc, char** argv) {
 
     struct midi_subcommand_t {
         std::string filepath;
-        bool print_time = true;
-        uint64_t time_begin = 0;
-        uint64_t time_end = 0;
-        bool print_lyrics = false;
+        bool print_time           = true;
+        uint64_t time_begin       = 0;
+        uint64_t time_end         = 0;
+        bool print_lyrics         = false;
         uint32_t print_lyrics_num = 1;
-        bool lyrics_emphasis = false;
-        double speed = 1.0;
-        bool loop = false;
+        bool lyrics_emphasis      = false;
+        double speed              = 1.0;
+        bool loop                 = false;
         void setup(CLI::App& app) {
             auto subcommand = app.add_subcommand("midi", "Play midi file");
             subcommand->add_option("filepath", filepath, "Filepath")->required()->check(CLI::ExistingFile);
@@ -155,7 +155,7 @@ int main(int argc, char** argv) {
                 }
                 std::cout << "Press ctrl + space to pause or continue" << std::endl;
                 std::cout << "Press shift + space to stop" << std::endl;
-                uint64_t last_time = std::numeric_limits<uint64_t>::max();
+                uint64_t last_time           = std::numeric_limits<uint64_t>::max();
                 TextList::iterator lyrics_it = lyrics.begin();
                 if (print_time || print_lyrics) {
                     std::cout << "\033[s";
